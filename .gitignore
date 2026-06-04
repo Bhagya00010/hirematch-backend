@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Environment Variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Uploads
+uploads/
+
+# ChromaDB
+chroma_db/
+
+# Database
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Alembic cache
+alembic/__pycache__/
+
+# Python build
+build/
+dist/
+*.egg-info/
+
+# Docker
+.docker/
+
+# Temporary
+tmp/
+temp/
