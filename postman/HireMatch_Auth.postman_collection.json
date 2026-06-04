@@ -1,45 +1,13 @@
 {
   "info": {
-    "_postman_id": "b8f3f8a7-0f7f-4d4c-b638-6ad902d3c9f8",
+    "_postman_id": "212532bd-0d6d-47e2-b3f9-6a7d49d9770a",
     "name": "HireMatch Auth API",
     "description": "Postman collection for HireMatch backend authentication APIs.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "47702954",
+    "_collection_link": "https://go.postman.co/collection/47702954-212532bd-0d6d-47e2-b3f9-6a7d49d9770a?source=collection_link"
   },
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "http://127.0.0.1:8000/api/v1"
-    },
-    {
-      "key": "access_token",
-      "value": ""
-    },
-    {
-      "key": "refresh_token",
-      "value": ""
-    },
-    {
-      "key": "reset_token",
-      "value": ""
-    }
-  ],
   "item": [
-    {
-      "name": "Health",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/health",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "health"
-          ]
-        }
-      }
-    },
     {
       "name": "Auth",
       "item": [
@@ -74,16 +42,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "register"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
             },
             "description": "Creates a new user with the selected role. Saves access_token and refresh_token into collection variables."
-          }
+          },
+          "response": []
         },
         {
           "name": "Login",
@@ -116,16 +80,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
             },
             "description": "Logs in with email and password. Saves access_token and refresh_token into collection variables."
-          }
+          },
+          "response": []
         },
         {
           "name": "Get Me",
@@ -144,16 +104,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
             },
             "description": "Returns the authenticated user profile."
-          }
+          },
+          "response": []
         },
         {
           "name": "Update Me - Profile",
@@ -181,16 +137,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
             },
             "description": "Updates the current user's profile fields."
-          }
+          },
+          "response": []
         },
         {
           "name": "Update Me - Password",
@@ -218,53 +170,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
             },
             "description": "Changes the current user's password. After this, login with the new password."
-          }
-        },
-        {
-          "name": "Update Me - Active Status",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{access_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"is_active\": false\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/me",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
-            },
-            "description": "Updates the current user's active status. Setting this to false disables future login/auth for this user."
-          }
+          },
+          "response": []
         },
         {
           "name": "Refresh Token - Body",
@@ -297,16 +208,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/refresh",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "refresh"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
             },
             "description": "Rotates refresh token and returns a new access token plus refresh token."
-          }
+          },
+          "response": []
         },
         {
           "name": "Refresh Token - Bearer Header",
@@ -349,16 +256,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/refresh",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "refresh"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
             },
             "description": "Alternative refresh request using refresh token as Bearer token."
-          }
+          },
+          "response": []
         },
         {
           "name": "Forgot Password",
@@ -376,16 +279,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/forgot-password",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "forgot-password"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "forgot-password"]
             },
             "description": "Generates a password reset token internally. Email delivery is not configured yet, so the API returns a safe generic response."
-          }
+          },
+          "response": []
         },
         {
           "name": "Reset Password",
@@ -403,16 +302,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/reset-password",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "reset-password"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "reset-password"]
             },
             "description": "Resets password using a reset token. Set reset_token manually until email delivery/admin testing helper is added."
-          }
+          },
+          "response": []
         },
         {
           "name": "Logout - Body",
@@ -440,16 +335,12 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "logout"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
             },
             "description": "Revokes the refresh token. Requires access token in Authorization header."
-          }
+          },
+          "response": []
         },
         {
           "name": "Logout - Refresh Bearer Header",
@@ -482,18 +373,45 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "logout"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
             },
             "description": "Same logout flow using access token auth and refresh token in body."
-          }
+          },
+          "response": []
         }
       ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000/api/v1"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "reset_token",
+      "value": ""
     }
   ]
 }
