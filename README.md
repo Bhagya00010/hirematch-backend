@@ -1,10 +1,12 @@
-# HireMatch Backend
+# HireMatch AI Backend
 
-FastAPI backend for HireMatch AI. The project currently includes the application entrypoint, environment-based configuration, SQLAlchemy database setup, and Alembic migration wiring.
+Backend service for **HireMatch AI**, an AI-powered recruitment platform that helps organizations streamline their hiring process through AI-powered resume parsing, candidate matching, and recruitment workflow automation.
 
-## Tech Stack
+---
 
-- Python
+# Tech Stack
+
+- Python 3.12+
 - FastAPI
 - Uvicorn
 - SQLAlchemy
@@ -12,87 +14,230 @@ FastAPI backend for HireMatch AI. The project currently includes the application
 - PostgreSQL
 - Pydantic Settings
 
-## Project Structure
+---
+
+# Project Structure
 
 ```text
-app/
-  core/
-    config.py       # Environment configuration
-    security.py     # Security helpers
-  db/
-    base.py         # SQLAlchemy declarative base
-    database.py     # Engine and session factory
-    session.py      # FastAPI DB dependency
-  models/
-    user.py         # User model placeholder
-  main.py           # FastAPI app
-alembic/
-  env.py            # Alembic environment config
-  script.py.mako    # Migration template
-requirements.txt
-.env.example
+hirematch-backend/
+│
+├── app/
+│   ├── api/
+│   ├── core/
+│   │   ├── config.py
+│   │   └── security.py
+│   │
+│   ├── db/
+│   │   ├── base.py
+│   │   ├── database.py
+│   │   └── session.py
+│   │
+│   ├── models/
+│   ├── schemas/
+│   ├── services/
+│   ├── utils/
+│   └── main.py
+│
+├── alembic/
+│
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
 ```
 
-## Prerequisites
+---
 
-- Python 3.10 or newer
+# Prerequisites
+
+Before starting, make sure the following software is installed:
+
+- Python 3.12+
 - PostgreSQL
-- Redis, if you add Celery background workers
+- Git
 
-## Setup
+Optional:
 
-Create and activate a virtual environment:
+- Redis (for future background jobs)
+- Docker Desktop
+
+---
+
+# Clone Repository
 
 ```bash
+git clone <repository-url>
+
+cd hirematch-backend
+```
+
+---
+
+# Create Virtual Environment
+
+## Windows
+
+```powershell
 python -m venv venv
+
+.\venv\Scripts\activate
 ```
 
-On Windows PowerShell:
+## Linux / macOS
 
 ```bash
-.\venv\Scripts\Activate.ps1
-```
+python3 -m venv venv
 
-On macOS or Linux:
-
-```bash
 source venv/bin/activate
 ```
 
-Install dependencies:
+---
+
+# Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Create a local environment file:
+---
 
-```bash
-cp .env.example .env
-```
+# Environment Configuration
 
-On Windows PowerShell, if `cp` is unavailable:
+Create a local environment file.
+
+### Windows
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Update `.env` with your local values:
+### Linux / macOS
+
+```bash
+cp .env.example .env
+```
+
+Update the `.env` file with your local configuration:
 
 ```env
 DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/hirematch
+
 SECRET_KEY=your-secret-key
+
 ALGORITHM=HS256
+
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
+
+PASSWORD_RESET_URL=http://localhost:3000/reset-password
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+
+SMTP_FROM_EMAIL=your-email@gmail.com
+SMTP_FROM_NAME=HireMatch AI
+
+SMTP_USE_TLS=true
 ```
 
-Create the PostgreSQL database if it does not already exist:
+> **Note:** For Gmail SMTP, use a Google App Password instead of your normal Gmail password.
+
+---
+
+# PostgreSQL Setup
+
+Create the database if it does not already exist.
 
 ```sql
 CREATE DATABASE hirematch;
 ```
 
-## Run the App
+Enable UUID generation support:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+```
+
+---
+
+# Database Migrations
+
+This project uses **Alembic** for database version control.
+
+## Apply Existing Migrations
+
+If you are setting up the project for the first time:
+
+```bash
+alembic upgrade head
+```
+
+---
+
+## Create a New Migration
+
+Whenever you add or modify SQLAlchemy models:
+
+```bash
+alembic revision --autogenerate -m "describe your changes"
+```
+
+Example:
+
+```bash
+alembic revision --autogenerate -m "create users table"
+```
+
+---
+
+## Apply New Migration
+
+```bash
+alembic upgrade head
+```
+
+---
+
+## Rollback Last Migration
+
+```bash
+alembic downgrade -1
+```
+
+---
+
+## Check Current Migration Version
+
+```bash
+alembic current
+```
+
+---
+
+## Migration Workflow
+
+```text
+Modify SQLAlchemy Models
+          │
+          ▼
+alembic revision --autogenerate -m "migration message"
+          │
+          ▼
+Review Migration File
+          │
+          ▼
+alembic upgrade head
+```
+
+---
+
+# Run Application
 
 Start the development server:
 
@@ -100,13 +245,29 @@ Start the development server:
 uvicorn app.main:app --reload
 ```
 
-Open:
+Server URL:
 
-- API root: `http://127.0.0.1:8000/`
-- Swagger docs: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
+```
+http://127.0.0.1:8000
+```
 
-The health endpoint should return:
+Swagger Documentation:
+
+```
+http://127.0.0.1:8000/docs
+```
+
+ReDoc Documentation:
+
+```
+http://127.0.0.1:8000/redoc
+```
+
+---
+
+# Health Check
+
+Example response:
 
 ```json
 {
@@ -115,38 +276,102 @@ The health endpoint should return:
 }
 ```
 
-## Database Migrations
+---
 
-Alembic is configured to read `DATABASE_URL` from `.env`.
+# Running Tests
 
-Create a new migration after adding or changing SQLAlchemy models:
-
-```bash
-alembic revision --autogenerate -m "describe changes"
-```
-
-Apply migrations:
-
-```bash
-alembic upgrade head
-```
-
-Roll back the latest migration:
-
-```bash
-alembic downgrade -1
-```
-
-## Tests
-
-Run tests with:
+Run all tests:
 
 ```bash
 pytest
 ```
 
-## Notes
+Run with verbose output:
 
-- Keep `.env` private. Use `.env.example` for shared configuration keys.
-- Import new SQLAlchemy models in `app/db/base.py` so Alembic can detect them during autogeneration.
-- `app/core/security.py` and `app/models/user.py` are currently placeholders.
+```bash
+pytest -v
+```
+
+---
+
+# Common Development Commands
+
+## Install New Package
+
+```bash
+pip install package-name
+
+pip freeze > requirements.txt
+```
+
+---
+
+## Create Migration
+
+```bash
+alembic revision --autogenerate -m "migration name"
+```
+
+---
+
+## Apply Migration
+
+```bash
+alembic upgrade head
+```
+
+---
+
+## Rollback Migration
+
+```bash
+alembic downgrade -1
+```
+
+---
+
+## Run Development Server
+
+```bash
+uvicorn app.main:app --reload
+```
+
+---
+
+## Stop Server
+
+```text
+CTRL + C
+```
+
+---
+
+# Development Guidelines
+
+- Never commit `.env`
+- Never commit `venv`
+- Always review generated Alembic migrations before applying them
+- Keep sensitive credentials outside the repository
+- Import new SQLAlchemy models in `app/db/base.py` so Alembic can detect them
+
+---
+
+# Future Modules
+
+- User Management
+- Job Management
+- Resume Upload
+- Resume Parsing
+- AI Candidate Matching
+- LangChain Integration
+- LangGraph Workflows
+- ChromaDB Integration
+- Background Workers
+- Docker Deployment
+- Kubernetes Deployment
+
+---
+
+# License
+
+Internal Project — HireMatch AI

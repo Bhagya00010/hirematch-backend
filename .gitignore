@@ -26,7 +26,7 @@ uploads/
 # ChromaDB
 chroma_db/
 
-# Database
+# SQLite
 *.db
 *.sqlite3
 
@@ -41,7 +41,7 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Alembic cache
+# Alembic
 alembic/__pycache__/
 
 # Python build
