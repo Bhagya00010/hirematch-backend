@@ -36,6 +36,30 @@ class Settings(BaseSettings):
 
     SMTP_USE_TLS: bool = True
 
+    # LLM and Embedding Providers configuration
+    LLM_PROVIDER: str | None = None
+    EMBEDDING_PROVIDER: str | None = None
+
+    # Ollama config
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_API_KEY: str | None = None
+    OLLAMA_LLM_MODEL: str | None = None
+    OLLAMA_EMBEDDING_MODEL: str | None = None
+    OLLAMA_MODEL: str | None = None
+    AI_EMBEDDING_MODEL: str | None = None
+
+    # Gemini config
+    GEMINI_API_KEY: str | None = None
+    GEMINI_LLM_MODEL: str = "gemini-1.5-flash"
+
+    # OpenAI config
+    OPENAI_API_KEY: str | None = None
+    OPENAI_LLM_MODEL: str = "gpt-4o-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # Hugging Face config
+    HUGGINGFACE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

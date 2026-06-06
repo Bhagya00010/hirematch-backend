@@ -20,6 +20,8 @@ pytesseract
 langchain
 langgraph
 langchain-openai
+langchain-google-genai
+langchain-ollama
 langchain-community
 
 chromadb
