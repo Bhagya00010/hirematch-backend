@@ -55,7 +55,7 @@ class OllamaProvider(BaseAIProvider):
             from langchain_ollama import OllamaEmbeddings
         except ImportError:
             raise ImportError(
-                "Could not import OllamaEmbeddings from langchain_ollama. "
+                "Could not import OllamaEmbeddings from langchain-ollama. "
                 "Please install langchain-ollama: pip install langchain-ollama"
             )
 
@@ -157,11 +157,13 @@ class OpenAIProvider(BaseAIProvider):
         )
 
 
-def get_provider() -> BaseAIProvider:
+def get_llm_provider(provider_name: Optional[str] = None) -> BaseAIProvider:
     """
-    Factory method to resolve the active AI provider strategy based on config.
+    Factory helper to resolve LLM provider strategy.
     """
-    provider_name = settings.LLM_PROVIDER
+    if not provider_name:
+        provider_name = settings.LLM_PROVIDER
+
     if not provider_name:
         if settings.OLLAMA_MODEL or settings.OLLAMA_LLM_MODEL:
             provider_name = "ollama"
@@ -174,8 +176,8 @@ def get_provider() -> BaseAIProvider:
                 "No LLM provider configured. Please set OLLAMA_MODEL, GEMINI_API_KEY, or OPENAI_API_KEY in your env."
             )
 
-    provider_name = provider_name.lower()
-    logger.info(f"Using AI Provider strategy: {provider_name}")
+    provider_name = provider_name.lower().strip()
+    logger.info(f"Resolved LLM Provider: {provider_name}")
 
     if provider_name == "ollama":
         return OllamaProvider()
@@ -187,15 +189,45 @@ def get_provider() -> BaseAIProvider:
         raise ValueError(f"Unsupported AI provider: {provider_name}")
 
 
+def get_embedding_provider(provider_name: Optional[str] = None) -> BaseAIProvider:
+    """
+    Factory helper to resolve Embedding provider strategy.
+    """
+    if not provider_name:
+        provider_name = settings.EMBEDDING_PROVIDER
+
+    if not provider_name:
+        if settings.OLLAMA_EMBEDDING_MODEL or settings.AI_EMBEDDING_MODEL:
+            provider_name = "ollama"
+        elif settings.GEMINI_API_KEY:
+            provider_name = "gemini"
+        elif settings.OPENAI_API_KEY:
+            provider_name = "openai"
+        else:
+            provider_name = "ollama"  # fallback default
+
+    provider_name = provider_name.lower().strip()
+    logger.info(f"Resolved Embedding Provider: {provider_name}")
+
+    if provider_name == "ollama":
+        return OllamaProvider()
+    elif provider_name == "gemini":
+        return GeminiProvider()
+    elif provider_name == "openai":
+        return OpenAIProvider()
+    else:
+        raise ValueError(f"Unsupported Embedding provider: {provider_name}")
+
+
 def get_llm(temperature: float = 0.0) -> BaseChatModel:
     """
     Global convenience helper to get the LLM using the active provider strategy.
     """
-    return get_provider().get_llm(temperature=temperature)
+    return get_llm_provider().get_llm(temperature=temperature)
 
 
 def get_embeddings() -> Embeddings:
     """
     Global convenience helper to get Embeddings using the active provider strategy.
     """
-    return get_provider().get_embeddings()
+    return get_embedding_provider().get_embeddings()
