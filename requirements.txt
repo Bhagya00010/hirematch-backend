@@ -41,3 +41,5 @@ pydantic-settings
 httpx
 
 pytest
+pgvector
+
