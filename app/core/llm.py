@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
 from app.core.config import settings
-
+from typing import Optional
 logger = logging.getLogger(__name__)
 
 
@@ -75,6 +75,7 @@ class GeminiProvider(BaseAIProvider):
     """
     Google Gemini Provider using langchain-google-genai with local Hugging Face embeddings.
     """
+
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.llm_model = settings.GEMINI_LLM_MODEL
@@ -90,12 +91,15 @@ class GeminiProvider(BaseAIProvider):
             )
 
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY must be set when using Gemini LLM.")
+            raise ValueError(
+                "GEMINI_API_KEY must be set when using Gemini LLM."
+            )
 
         return ChatGoogleGenerativeAI(
             model=self.llm_model,
             google_api_key=self.api_key,
             temperature=temperature,
+            tags=["hirematch-ai"]  # Optional for LangSmith
         )
 
     def get_embeddings(self) -> Embeddings:
@@ -104,13 +108,13 @@ class GeminiProvider(BaseAIProvider):
         except ImportError:
             raise ImportError(
                 "Could not import HuggingFaceEmbeddings. "
-                "Make sure sentence-transformers is installed: pip install sentence-transformers"
+                "Make sure sentence-transformers is installed: "
+                "pip install sentence-transformers"
             )
 
         return HuggingFaceEmbeddings(
             model_name=self.huggingface_model
         )
-
 
 class OpenAIProvider(BaseAIProvider):
     """

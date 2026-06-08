@@ -23,7 +23,8 @@ langchain-openai
 langchain-google-genai
 langchain-ollama
 langchain-community
-
+langsmith
+python-dotenv
 chromadb
 
 sentence-transformers
