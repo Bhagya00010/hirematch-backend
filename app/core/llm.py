@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 from abc import ABC, abstractmethod
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
@@ -27,6 +28,7 @@ class OllamaProvider(BaseAIProvider):
     """
     Ollama Provider using langchain-ollama.
     """
+
     def __init__(self):
         self.base_url = settings.OLLAMA_BASE_URL
         self.api_key = settings.OLLAMA_API_KEY
@@ -41,7 +43,8 @@ class OllamaProvider(BaseAIProvider):
                 "Please install langchain-ollama: pip install langchain-ollama"
             )
 
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
         return ChatOllama(
             model=self.model_name,
@@ -75,6 +78,7 @@ class GeminiProvider(BaseAIProvider):
     """
     Google Gemini Provider using langchain-google-genai with local Hugging Face embeddings.
     """
+
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.llm_model = settings.GEMINI_LLM_MODEL
@@ -90,7 +94,8 @@ class GeminiProvider(BaseAIProvider):
             )
 
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY must be set when using Gemini LLM.")
+            raise ValueError(
+                "GEMINI_API_KEY must be set when using Gemini LLM.")
 
         return ChatGoogleGenerativeAI(
             model=self.llm_model,
@@ -116,6 +121,7 @@ class OpenAIProvider(BaseAIProvider):
     """
     OpenAI Provider using langchain-openai.
     """
+
     def __init__(self):
         self.api_key = settings.OPENAI_API_KEY
         self.llm_model = settings.OPENAI_LLM_MODEL
@@ -131,7 +137,8 @@ class OpenAIProvider(BaseAIProvider):
             )
 
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY must be set when using OpenAI LLM.")
+            raise ValueError(
+                "OPENAI_API_KEY must be set when using OpenAI LLM.")
 
         return ChatOpenAI(
             model=self.llm_model,
@@ -149,7 +156,8 @@ class OpenAIProvider(BaseAIProvider):
             )
 
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY must be set when using OpenAI embeddings.")
+            raise ValueError(
+                "OPENAI_API_KEY must be set when using OpenAI embeddings.")
 
         return OpenAIEmbeddings(
             model=self.embedding_model,

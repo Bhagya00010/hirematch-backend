@@ -383,6 +383,419 @@
       ]
     },
     {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Create Job",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const job = json.job || (json.data && json.data.job) || json;",
+                  "if (job && job.job_id) {",
+                  "  pm.collectionVariables.set('job_id', job.job_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"job_title\": \"Senior Python Developer\",\n  \"job_code\": \"PY-001\",\n  \"department\": \"Engineering\",\n  \"employment_type\": \"Full Time\",\n  \"work_mode\": \"Hybrid\",\n  \"experience_min\": 3,\n  \"experience_max\": 6,\n  \"salary_min\": 800000,\n  \"salary_max\": 1800000,\n  \"currency\": \"INR\",\n  \"vacancies\": 2,\n  \"location_country\": \"India\",\n  \"location_state\": \"Gujarat\",\n  \"location_city\": \"Ahmedabad\",\n  \"notice_period_max\": 30,\n  \"job_description\": \"We need a Python developer with FastAPI, PostgreSQL, Docker, REST APIs, and cloud deployment experience.\",\n  \"responsibilities\": \"Build APIs, optimize database queries, write tests, and deploy backend services.\",\n  \"required_skills\": [\"Python\", \"FastAPI\", \"PostgreSQL\", \"REST API\"],\n  \"preferred_skills\": [\"Docker\", \"AWS\", \"Celery\"],\n  \"education_requirements\": \"B.Tech/B.E. in Computer Science or equivalent\",\n  \"certifications\": [],\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/jobs",
+              "host": ["{{base_url}}"],
+              "path": ["jobs"]
+            },
+            "description": "Creates a job and saves job_id for resume upload/testing."
+          },
+          "response": []
+        },
+        {
+          "name": "List Jobs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs?skip=0&limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["jobs"],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Job Embedding",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/generate-embedding",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "generate-embedding"]
+            },
+            "description": "Creates or updates the job_embeddings pgvector row for this job."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Resume Upload & Processing",
+      "item": [
+        {
+          "name": "Upload Multiple Resumes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.resumes && json.resumes.length) {",
+                  "  pm.collectionVariables.set('resume_file_id', json.resumes[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes"]
+            },
+            "description": "Select one or more local resume files in the form-data `files` rows. Supported by backend: .pdf, .docx, .txt."
+          },
+          "response": []
+        },
+        {
+          "name": "List Uploaded Resumes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes"]
+            },
+            "description": "Shows uploaded resume file rows and validation/processing status."
+          },
+          "response": []
+        },
+        {
+          "name": "Process Resumes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes/process",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes", "process"]
+            },
+            "description": "Extracts text, validates resume content, extracts candidate fields with LLM fallback logic, creates candidate rows, and stores pgvector embeddings."
+          },
+          "response": []
+        },
+        {
+          "name": "Processing Log",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes/processing-log",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes", "processing-log"]
+            },
+            "description": "Returns per-file processing logs, failed reasons, and extracted candidate details for successful resumes."
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Processing Stream",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes/stream",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes", "stream"]
+            },
+            "description": "SSE stream for processing updates. Postman can display streamed event data, but the frontend will usually consume this endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Resume File",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/resumes/{{resume_file_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "resumes", "{{resume_file_id}}"]
+            },
+            "description": "Deletes the resume file row, candidate row, candidate embedding, match results, and local stored file."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Candidates & Matching",
+      "item": [
+        {
+          "name": "List Candidates For Job",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (Array.isArray(json) && json.length) {",
+                  "  pm.collectionVariables.set('candidate_id', json[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/candidates",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "candidates"]
+            },
+            "description": "Lists successfully extracted candidates for the job."
+          },
+          "response": []
+        },
+        {
+          "name": "Run Match",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/match",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "match"]
+            },
+            "description": "Scores processed candidates against the job using keyword overlap plus pgvector cosine similarity."
+          },
+          "response": []
+        },
+        {
+          "name": "Match Results",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}/match/results?limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["jobs", "{{job_id}}", "match", "results"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Returns ranked candidates with overall score, sub-scores, matched keywords, unmatched keywords, BM25-like keyword score, semantic score, and AI summary."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Health",
       "request": {
         "method": "GET",
@@ -411,6 +824,18 @@
     },
     {
       "key": "reset_token",
+      "value": ""
+    },
+    {
+      "key": "job_id",
+      "value": ""
+    },
+    {
+      "key": "resume_file_id",
+      "value": ""
+    },
+    {
+      "key": "candidate_id",
       "value": ""
     }
   ]
