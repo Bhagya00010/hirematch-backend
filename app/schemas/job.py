@@ -1,32 +1,21 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
-from app.models.job import EmploymentType, WorkMode, JobStatus
+from app.models.job import JobStatus
 
 
 class JobBase(BaseModel):
     job_title: str = Field(..., max_length=255, description="Title of the job")
     job_code: str = Field(default="", max_length=100, description="Unique internal job code")
     department: str = Field(default="", max_length=150, description="Department name")
-    employment_type: str = Field(default="", max_length=50, description="Employment type (Full Time, Part Time, etc.)")
-    work_mode: str = Field(default="", max_length=50, description="Work mode (Remote, Hybrid, Onsite)")
     
     experience_min: int = Field(default=0, ge=0, description="Minimum experience required in years")
-    experience_max: int = Field(default=10, ge=0, description="Maximum experience required in years")
-    salary_min: float = Field(default=0.0, ge=0.0, description="Minimum salary range")
-    salary_max: float = Field(default=0.0, ge=0.0, description="Maximum salary range")
-    currency: str = Field("USD", max_length=10, description="Salary currency")
+    experience_max: int | None = Field(None, ge=0, description="Maximum experience required in years")
     vacancies: int = Field(1, ge=1, description="Number of vacancies")
-    
-    location_country: str = Field(default="", max_length=100, description="Location country")
-    location_state: str = Field(default="", max_length=100, description="Location state")
-    location_city: str = Field(default="", max_length=100, description="Location city")
-    notice_period_max: int = Field(30, ge=0, description="Maximum acceptable notice period in days")
     
     job_description: str = Field(..., description="Detailed job description")
     responsibilities: str = Field(default="", description="Job responsibilities")
     required_skills: list[str] = Field(default_factory=list, description="Required technical skills")
-    preferred_skills: list[str] = Field(default_factory=list, description="Preferred technical skills")
     education_requirements: str = Field(default="", description="Education requirements")
     certifications: list[str] = Field(default_factory=list, description="Required/Preferred certifications")
     
@@ -34,12 +23,6 @@ class JobBase(BaseModel):
     industry: str | None = Field(None, max_length=150)
     team_name: str | None = Field(None, max_length=150)
     project_name: str | None = Field(None, max_length=150)
-    benefits: str | None = Field(None)
-    working_hours: str | None = Field(None, max_length=100)
-    shift_details: str | None = Field(None, max_length=100)
-    travel_requirements: str | None = Field(None)
-    relocation_support: bool | None = Field(False)
-    visa_sponsorship: bool | None = Field(False)
     internal_notes: str | None = Field(None)
     
     status: JobStatus = Field(JobStatus.DRAFT, description="Current job status")
@@ -54,34 +37,18 @@ class JobUpdate(BaseModel):
     job_title: str | None = Field(None, max_length=255)
     job_code: str | None = Field(None, max_length=100)
     department: str | None = Field(None, max_length=150)
-    employment_type: EmploymentType | None = Field(None)
-    work_mode: WorkMode | None = Field(None)
     experience_min: int | None = Field(None, ge=0)
     experience_max: int | None = Field(None, ge=0)
-    salary_min: float | None = Field(None, ge=0.0)
-    salary_max: float | None = Field(None, ge=0.0)
-    currency: str | None = Field(None, max_length=10)
     vacancies: int | None = Field(None, ge=1)
-    location_country: str | None = Field(None, max_length=100)
-    location_state: str | None = Field(None, max_length=100)
-    location_city: str | None = Field(None, max_length=100)
-    notice_period_max: int | None = Field(None, ge=0)
     job_description: str | None = Field(None)
     responsibilities: str | None = Field(None)
     required_skills: list[str] | None = Field(None)
-    preferred_skills: list[str] | None = Field(None)
     education_requirements: str | None = Field(None)
     certifications: list[str] | None = Field(None)
     
     industry: str | None = Field(None, max_length=150)
     team_name: str | None = Field(None, max_length=150)
     project_name: str | None = Field(None, max_length=150)
-    benefits: str | None = Field(None)
-    working_hours: str | None = Field(None, max_length=100)
-    shift_details: str | None = Field(None, max_length=100)
-    travel_requirements: str | None = Field(None)
-    relocation_support: bool | None = Field(None)
-    visa_sponsorship: bool | None = Field(None)
     internal_notes: str | None = Field(None)
     
     status: JobStatus | None = Field(None)
@@ -95,7 +62,6 @@ class JobResponse(JobBase):
     # AI generated fields
     ai_summary: str | None = None
     ai_required_skills: list[str] | None = None
-    ai_preferred_skills: list[str] | None = None
     ai_job_category: str | None = None
     ai_seniority_level: str | None = None
     ai_keywords: list[str] | None = None
@@ -132,7 +98,6 @@ class JobAISummaryResponse(BaseModel):
     job_id: UUID
     ai_summary: str | None = None
     ai_required_skills: list[str] | None = None
-    ai_preferred_skills: list[str] | None = None
     ai_job_category: str | None = None
     ai_seniority_level: str | None = None
     ai_keywords: list[str] | None = None

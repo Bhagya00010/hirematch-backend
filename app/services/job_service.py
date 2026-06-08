@@ -152,7 +152,8 @@ def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
         "education_requirements": job.education_requirements,
         "certifications": job.certifications,
         "required_skills": job.required_skills,
-        "preferred_skills": job.preferred_skills,
+        "experience_min": job.experience_min,
+        "experience_max": job.experience_max,
     }
 
     state: JobWorkflowState = {
@@ -217,17 +218,12 @@ def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
         "education_requirements": job.education_requirements,
         "certifications": job.certifications,
         "required_skills": job.required_skills,
-        "preferred_skills": job.preferred_skills,
         "experience_min": job.experience_min,
         "experience_max": job.experience_max,
-        "location_city": job.location_city,
-        "location_state": job.location_state,
-        "location_country": job.location_country,
     }
 
     extracted = {
         "primary_skills": job.ai_required_skills,
-        "secondary_skills": job.ai_preferred_skills,
         "tools": job.ai_tools,
         "education": job.education_requirements,  # Fallback
         "seniority_level": job.ai_seniority_level,
@@ -304,36 +300,12 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
             continue
         
         if hasattr(job, field_name):
-            if field_name == "employment_type":
-                try:
-                    from app.models.job import EmploymentType
-                    for enum_member in EmploymentType:
-                        if enum_member.value.lower() == answer.lower().strip():
-                            setattr(job, field_name, enum_member)
-                            break
-                    else:
-                        setattr(job, field_name, EmploymentType.FULL_TIME)
-                except (ValueError, KeyError):
-                    logger.warning(f"Invalid employment_type value: {answer}, using default")
-                    setattr(job, field_name, EmploymentType.FULL_TIME)
-            elif field_name == "work_mode":
-                try:
-                    from app.models.job import WorkMode
-                    for enum_member in WorkMode:
-                        if enum_member.value.lower() == answer.lower().strip():
-                            setattr(job, field_name, enum_member)
-                            break
-                    else:
-                        setattr(job, field_name, WorkMode.HYBRID)
-                except (ValueError, KeyError):
-                    logger.warning(f"Invalid work_mode value: {answer}, using default")
-                    setattr(job, field_name, WorkMode.HYBRID)
-            elif field_name in ["experience_min", "experience_max", "salary_min", "salary_max", "vacancies", "notice_period_max"]:
+            if field_name in ["experience_min", "experience_max", "salary_min", "salary_max", "vacancies", "notice_period_max"]:
                 try:
                     setattr(job, field_name, int(answer) if "experience" in field_name or "vacancies" in field_name or "notice" in field_name else float(answer))
                 except ValueError:
                     logger.warning(f"Invalid numeric value for {field_name}: {answer}")
-            elif field_name in ["required_skills", "preferred_skills", "certifications"]:
+            elif field_name in ["required_skills", "certifications"]:
                 setattr(job, field_name, [s.strip() for s in answer.split(",")])
             elif field_name in ["relocation_support", "visa_sponsorship"]:
                 setattr(job, field_name, answer.lower() in ["true", "yes", "1"])
@@ -350,10 +322,17 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
         "job_title": job.job_title,
         "job_description": job.job_description,
         "department": job.department,
-        "employment_type": job.employment_type.value if hasattr(job.employment_type, 'value') else str(job.employment_type),
-        "work_mode": job.work_mode.value if hasattr(job.work_mode, 'value') else str(job.work_mode),
         "responsibilities": job.responsibilities,
         "required_skills": job.required_skills,
+        "education_requirements": job.education_requirements,
+        "experience_min": job.experience_min,
+        "experience_max": job.experience_max,
+        "vacancies": job.vacancies,
+        "certifications": job.certifications,
+        "industry": job.industry,
+        "team_name": job.team_name,
+        "project_name": job.project_name,
+        "internal_notes": job.internal_notes,
     }
     
     fields_to_ask = get_fields_to_ask()
@@ -387,33 +366,17 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
         "job_title": job.job_title,
         "job_code": job.job_code,
         "department": job.department,
-        "employment_type": job.employment_type.value if hasattr(job.employment_type, 'value') else str(job.employment_type),
-        "work_mode": job.work_mode.value if hasattr(job.work_mode, 'value') else str(job.work_mode),
         "experience_min": job.experience_min,
         "experience_max": job.experience_max,
-        "salary_min": job.salary_min,
-        "salary_max": job.salary_max,
-        "currency": job.currency,
         "vacancies": job.vacancies,
-        "location_country": job.location_country,
-        "location_state": job.location_state,
-        "location_city": job.location_city,
-        "notice_period_max": job.notice_period_max,
         "job_description": job.job_description,
         "responsibilities": job.responsibilities,
         "required_skills": job.required_skills,
-        "preferred_skills": job.preferred_skills,
         "education_requirements": job.education_requirements,
         "certifications": job.certifications,
         "industry": job.industry,
         "team_name": job.team_name,
         "project_name": job.project_name,
-        "benefits": job.benefits,
-        "working_hours": job.working_hours,
-        "shift_details": job.shift_details,
-        "travel_requirements": job.travel_requirements,
-        "relocation_support": job.relocation_support,
-        "visa_sponsorship": job.visa_sponsorship,
         "internal_notes": job.internal_notes,
         "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
     }

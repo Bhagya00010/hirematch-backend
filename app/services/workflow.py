@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from langgraph.graph import StateGraph, START, END
 
 from app.core.llm import get_llm, get_embeddings
-from app.models.job import Job, JobEmbedding, EmploymentType, WorkMode, JobStatus
+from app.models.job import Job, JobEmbedding, JobStatus
 
 logger = logging.getLogger(__name__)
 
@@ -38,23 +38,11 @@ Job Description: {job_description}
 Extract these fields if present in the text:
 - job_title: The role name (e.g., "Machine Learning Engineer", "Senior Developer", "Product Manager")
 - responsibilities: Main duties and responsibilities as a single string
-- employment_type: One of these exact values: "Full Time", "Part Time", "Contract", "Internship", "Freelance"
-- work_mode: One of these exact values: "Remote", "Hybrid", "Onsite"
 
 CRITICAL INSTRUCTIONS:
 1. Look ANYWHERE in the text for the role name - beginning, end, middle
-2. For employment_type, map variations to exact values:
-   - "Full-time", "Full time", "full-time", "Full-Time" → "Full Time"
-   - "Part-time", "Part time", "part-time", "Part-Time" → "Part Time"
-   - "Contract", "contractor", "contractual" → "Contract"
-   - "Internship", "intern", "interns" → "Internship"
-   - "Freelance", "freelancer" → "Freelance"
-3. For work_mode, map variations to exact values:
-   - "Remote", "remote work", "work from home", "WFH" → "Remote"
-   - "Hybrid", "hybrid work", "mix of remote and office" → "Hybrid"
-   - "On-site", "Onsite", "Office", "in-office", "in person" → "Onsite"
-4. Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
-5. Handle informal language, typos, and variations intelligently
+2. Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
+3. Handle informal language, typos, and variations intelligently
 
 Return a JSON object with the field names as keys. If a field cannot be found, set it to null.
 
@@ -301,32 +289,42 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
    - "Experience with [skill]"
    - Extract as comma-separated list
 
-4. **department**: Look for:
+4. **education_requirements**: Look for:
+   - "Education:" or "Qualifications:" or "Requirements:"
+   - "Bachelor's degree", "Master's degree", "PhD"
+   - "Degree in [field]"
+   - "Educational requirements"
+   - Extract as a single string
+
+5. **department**: Look for:
    - "Department:" or "Team:"
    - "Join our [department] team"
    - "Engineering", "Marketing", "Sales", "Product", "Design", etc.
 
-5. **employment_type**: Look for these EXACT keywords and map them:
-   - "Full-time", "Full time", "full-time", "Full-Time" → "Full Time"
-   - "Part-time", "Part time", "part-time", "Part-Time" → "Part Time"
-   - "Contract", "contractor", "contractual" → "Contract"
-   - "Internship", "intern", "interns" → "Internship"
-   - "Freelance", "freelancer" → "Freelance"
+6. **experience_min**: Look for:
+   - "X+ years experience", "Minimum X years", "At least X years"
+   - "X years of experience required"
+   - Extract as integer (number only)
 
-6. **work_mode**: Look for these EXACT keywords and map them:
-   - "Remote", "remote work", "work from home", "WFH" → "Remote"
-   - "Hybrid", "hybrid work", "mix of remote and office" → "Hybrid"
-   - "On-site", "Onsite", "Office", "in-office", "in person" → "Onsite"
+7. **experience_max**: Look for:
+   - "Up to X years", "Maximum X years"
+   - "X-Y years experience" (extract Y)
+   - Extract as integer (number only)
+
+8. **certifications**: Look for:
+   - "Certifications:", "Required certifications:"
+   - Specific certification names (e.g., "AWS", "PMP", "Scrum")
+   - Extract as comma-separated list
 
 IMPORTANT: 
 - Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
 - Handle informal language, typos, and variations
 - The description may be in casual human language - extract intelligently
 - If a field is mentioned even indirectly, extract it
-- For employment_type and work_mode, ALWAYS use the exact mapped values above
+- For experience, extract numbers only (no "years", no text)
 
 Return a JSON object with the field names as keys. For list fields, return an array of strings.
-For enum fields (employment_type, work_mode), use ONLY the mapped values specified above.
+For numeric fields (experience_min, experience_max), return numbers only.
 If a field cannot be found in the text, set it to null.
 
 Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
@@ -367,7 +365,7 @@ Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or exp
         logger.info(f"Updated input_data keys: {list(updated_input_data.keys())}")
         
         # Fallback: If any fields are still missing, try common AI extraction
-        missing_fields = ["job_title", "responsibilities", "employment_type", "work_mode"]
+        missing_fields = ["job_title", "responsibilities"]
         if any(is_insufficient_data(updated_input_data.get(field)) for field in missing_fields) and job_description:
             logger.info("AI extraction failed for some fields, trying common AI fallback")
             fallback_data = extract_all_fields_common_fallback(job_description, job_title)
@@ -383,7 +381,7 @@ Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or exp
         logger.error(f"LLM response was: {text if 'text' in locals() else 'N/A'}")
         
         # Fallback: Try common AI extraction even if AI failed completely
-        missing_fields = ["job_title", "responsibilities", "employment_type", "work_mode"]
+        missing_fields = ["job_title", "responsibilities"]
         if any(is_insufficient_data(input_data.get(field)) for field in missing_fields) and job_description:
             logger.info("AI extraction failed completely, trying common AI fallback")
             fallback_data = extract_all_fields_common_fallback(job_description, job_title)
@@ -423,20 +421,6 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
     input_data = state["input_data"]
     job_id = state.get("job_id")
 
-    employment_type_str = input_data.get("employment_type", "")
-    try:
-        employment_type = EmploymentType(employment_type_str) if employment_type_str else EmploymentType.FULL_TIME
-    except (ValueError, KeyError):
-        logger.warning(f"Invalid employment_type value: {employment_type_str}, using default")
-        employment_type = EmploymentType.FULL_TIME
-
-    work_mode_str = input_data.get("work_mode", "")
-    try:
-        work_mode = WorkMode(work_mode_str) if work_mode_str else WorkMode.ONSITE
-    except (ValueError, KeyError):
-        logger.warning(f"Invalid work_mode value: {work_mode_str}, using default")
-        work_mode = WorkMode.ONSITE
-
     status = JobStatus.DRAFT
     if "status" in input_data:
         try:
@@ -470,30 +454,35 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
             "created_by": state["created_by"],
             "job_title": job_title,
             "job_code": input_data.get("job_code", ""),
-            "currency": input_data.get("currency", "USD"),
             "vacancies": input_data.get("vacancies", 1),
-            "notice_period_max": input_data.get("notice_period_max", 30),
             "job_description": input_data["job_description"],
-            "preferred_skills": input_data.get("preferred_skills", []),
             "status": status,
             "industry": input_data.get("industry"),
             "team_name": input_data.get("team_name"),
             "project_name": input_data.get("project_name"),
-            "benefits": input_data.get("benefits"),
-            "working_hours": input_data.get("working_hours"),
-            "shift_details": input_data.get("shift_details"),
-            "travel_requirements": input_data.get("travel_requirements"),
-            "relocation_support": input_data.get("relocation_support", False),
-            "visa_sponsorship": input_data.get("visa_sponsorship", False),
             "internal_notes": input_data.get("internal_notes"),
         }
         
         for field_config in get_all_fields():
             field_name = field_config["field_name"]
-            job_data[field_name] = input_data.get(field_name, field_config["default_value"])
+            if field_name not in ["experience_max"]:
+                job_data[field_name] = input_data.get(field_name, field_config["default_value"])
         
-        job_data["employment_type"] = employment_type
-        job_data["work_mode"] = work_mode
+        # Handle experience logic for new job creation
+        experience_min = input_data.get("experience_min")
+        experience_max = input_data.get("experience_max")
+        if experience_min is not None and experience_max is None:
+            # Only min provided, keep max as null
+            job_data["experience_min"] = experience_min
+            job_data["experience_max"] = None
+        elif experience_max is not None and experience_min is None:
+            # Only max provided, min can default to 0
+            job_data["experience_min"] = 0
+            job_data["experience_max"] = experience_max
+        else:
+            # Both provided or both null
+            job_data["experience_min"] = experience_min if experience_min is not None else 0
+            job_data["experience_max"] = experience_max if experience_max is not None else None
         
         job = Job(**job_data)
         db.add(job)
@@ -501,29 +490,33 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
         job.job_title = input_data["job_title"]
         job.job_code = input_data["job_code"]
         job.department = input_data["department"]
-        job.employment_type = employment_type
-        job.work_mode = work_mode
-        job.experience_min = input_data["experience_min"]
-        job.experience_max = input_data["experience_max"]
-        job.salary_min = input_data["salary_min"]
-        job.salary_max = input_data["salary_max"]
-        job.currency = input_data.get("currency", job.currency)
+        
+        # Handle experience logic: if only min provided, max should be null. If only max provided, min can default to 0
+        experience_min = input_data.get("experience_min")
+        experience_max = input_data.get("experience_max")
+        if experience_min is not None and experience_max is None:
+            # Only min provided, keep max as null
+            job.experience_min = experience_min
+            job.experience_max = None
+        elif experience_max is not None and experience_min is None:
+            # Only max provided, min can default to 0
+            job.experience_min = 0
+            job.experience_max = experience_max
+        else:
+            # Both provided or both null
+            job.experience_min = experience_min if experience_min is not None else job.experience_min
+            job.experience_max = experience_max if experience_max is not None else job.experience_max
+        
         job.vacancies = input_data.get("vacancies", job.vacancies)
-        job.location_country = input_data["location_country"]
-        job.location_state = input_data["location_state"]
-        job.location_city = input_data["location_city"]
-        job.notice_period_max = input_data.get("notice_period_max", job.notice_period_max)
         job.job_description = input_data["job_description"]
         job.responsibilities = input_data["responsibilities"]
         job.required_skills = input_data.get("required_skills", job.required_skills)
-        job.preferred_skills = input_data.get("preferred_skills", job.preferred_skills)
         job.education_requirements = input_data["education_requirements"]
         job.certifications = input_data.get("certifications", job.certifications)
         job.status = status
         
         for field in [
-            "industry", "team_name", "project_name", "benefits", "working_hours",
-            "shift_details", "travel_requirements", "relocation_support", "visa_sponsorship", "internal_notes"
+            "industry", "team_name", "project_name", "internal_notes"
         ]:
             if field in input_data:
                 setattr(job, field, input_data[field])
@@ -586,7 +579,6 @@ Responsibilities: {input_data.get('responsibilities')}
 Education Requirements: {input_data.get('education_requirements')}
 Certifications: {', '.join(input_data.get('certifications', []))}
 Required Skills: {', '.join(input_data.get('required_skills', []))}
-Preferred Skills: {', '.join(input_data.get('preferred_skills', []))}
 
 Return a JSON object with the following keys. Values MUST be lists of strings unless specified otherwise:
 - primary_skills: key technical skills/languages needed.
@@ -604,7 +596,6 @@ Return a JSON object with the following keys. Values MUST be lists of strings un
 - education: string (e.g. Bachelor's in CS, High School).
 - certifications: list of certifications.
 - years_experience: range or string (e.g. "3-5 years").
-- notice_period: string (e.g. "30 days").
 - location_preferences: location requirements/preferences.
 
 Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
@@ -665,7 +656,6 @@ def create_embedding_text_node(state: JobWorkflowState) -> Dict[str, Any]:
     keywords = state.get("ai_keywords") or {}
 
     req_skills = ", ".join(input_data.get("required_skills") or [])
-    pref_skills = ", ".join(input_data.get("preferred_skills") or [])
     certifications = ", ".join(input_data.get("certifications") or [])
 
     ai_primary = ", ".join(extracted.get("primary_skills") or [])
@@ -684,9 +674,7 @@ def create_embedding_text_node(state: JobWorkflowState) -> Dict[str, Any]:
     embedding_text = f"""Job Title: {input_data.get('job_title')}
 Department: {input_data.get('department')}
 Experience range: {input_data.get('experience_min')} to {input_data.get('experience_max')} years. Seniority Level: {extracted.get('seniority_level', '')}
-Location: {input_data.get('location_city')}, {input_data.get('location_state')}, {input_data.get('location_country')}
 Required Skills: {req_skills}
-Preferred Skills: {pref_skills}
 Responsibilities: {input_data.get('responsibilities')}
 Job Description: {input_data.get('job_description')}
 Education Requirements: {input_data.get('education_requirements')}. AI Education: {extracted.get('education', '')}
@@ -805,9 +793,6 @@ def update_ai_metadata_node(state: JobWorkflowState) -> Dict[str, Any]:
     job.ai_summary = ai_summary
     job.ai_required_skills = extracted.get("primary_skills", []) + extracted.get("mandatory_skills", [])
     job.ai_required_skills = list(set(job.ai_required_skills))
-    
-    job.ai_preferred_skills = extracted.get("secondary_skills", []) + extracted.get("nice_to_have_skills", [])
-    job.ai_preferred_skills = list(set(job.ai_preferred_skills))
 
     job.ai_job_category = extracted.get("job_category")
     job.ai_seniority_level = extracted.get("seniority_level")
