@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+import enum
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -15,6 +16,8 @@ from app.services.workflow import (
 )
 
 logger = logging.getLogger(__name__)
+
+
 
 
 
@@ -304,17 +307,27 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
             if field_name == "employment_type":
                 try:
                     from app.models.job import EmploymentType
-                    setattr(job, field_name, EmploymentType(answer))
+                    for enum_member in EmploymentType:
+                        if enum_member.value.lower() == answer.lower().strip():
+                            setattr(job, field_name, enum_member)
+                            break
+                    else:
+                        setattr(job, field_name, EmploymentType.FULL_TIME)
                 except (ValueError, KeyError):
-                    logger.warning(f"Invalid employment_type value: {answer}, keeping as string")
-                    setattr(job, field_name, answer)
+                    logger.warning(f"Invalid employment_type value: {answer}, using default")
+                    setattr(job, field_name, EmploymentType.FULL_TIME)
             elif field_name == "work_mode":
                 try:
                     from app.models.job import WorkMode
-                    setattr(job, field_name, WorkMode(answer))
+                    for enum_member in WorkMode:
+                        if enum_member.value.lower() == answer.lower().strip():
+                            setattr(job, field_name, enum_member)
+                            break
+                    else:
+                        setattr(job, field_name, WorkMode.HYBRID)
                 except (ValueError, KeyError):
-                    logger.warning(f"Invalid work_mode value: {answer}, keeping as string")
-                    setattr(job, field_name, answer)
+                    logger.warning(f"Invalid work_mode value: {answer}, using default")
+                    setattr(job, field_name, WorkMode.HYBRID)
             elif field_name in ["experience_min", "experience_max", "salary_min", "salary_max", "vacancies", "notice_period_max"]:
                 try:
                     setattr(job, field_name, int(answer) if "experience" in field_name or "vacancies" in field_name or "notice" in field_name else float(answer))
@@ -365,5 +378,123 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
                 "questions": question_result.get("questions", []),
                 "job_id": str(job_id)
             }
+    
+    
+    logger.info("All data complete, triggering full AI workflow for embedding generation")
+    
+    
+    complete_input_data = {
+        "job_title": job.job_title,
+        "job_code": job.job_code,
+        "department": job.department,
+        "employment_type": job.employment_type.value if hasattr(job.employment_type, 'value') else str(job.employment_type),
+        "work_mode": job.work_mode.value if hasattr(job.work_mode, 'value') else str(job.work_mode),
+        "experience_min": job.experience_min,
+        "experience_max": job.experience_max,
+        "salary_min": job.salary_min,
+        "salary_max": job.salary_max,
+        "currency": job.currency,
+        "vacancies": job.vacancies,
+        "location_country": job.location_country,
+        "location_state": job.location_state,
+        "location_city": job.location_city,
+        "notice_period_max": job.notice_period_max,
+        "job_description": job.job_description,
+        "responsibilities": job.responsibilities,
+        "required_skills": job.required_skills,
+        "preferred_skills": job.preferred_skills,
+        "education_requirements": job.education_requirements,
+        "certifications": job.certifications,
+        "industry": job.industry,
+        "team_name": job.team_name,
+        "project_name": job.project_name,
+        "benefits": job.benefits,
+        "working_hours": job.working_hours,
+        "shift_details": job.shift_details,
+        "travel_requirements": job.travel_requirements,
+        "relocation_support": job.relocation_support,
+        "visa_sponsorship": job.visa_sponsorship,
+        "internal_notes": job.internal_notes,
+        "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
+    }
+    
+    from app.services.workflow import (
+        generate_ai_summary_node, extract_skills_node, generate_searchable_keywords_node,
+        create_embedding_text_node, generate_embedding_node, store_vector_node,
+        update_ai_metadata_node, JobWorkflowState
+    )
+    
+    state: JobWorkflowState = {
+        "job_id": job_id,
+        "company_id": job.company_id,
+        "created_by": job.created_by,
+        "input_data": complete_input_data,
+        "db": db,
+        "errors": [],
+        "ai_summary": None,
+        "ai_extracted_metadata": None,
+        "ai_keywords": None,
+        "embedding_text": None,
+        "embedding_vector": None,
+        "embedding_dimension": None,
+        "embedding_model_name": None,
+        "needs_clarification": None,
+        "questions": None
+    }
+    
+    try:
+        # Generate AI summary
+        summary_result = generate_ai_summary_node(state)
+        if summary_result.get("errors"):
+            logger.error(f"AI summary generation failed: {summary_result['errors']}")
+        else:
+            state["ai_summary"] = summary_result.get("ai_summary")
+        
+        # Extract skills
+        skills_result = extract_skills_node(state)
+        if skills_result.get("errors"):
+            logger.error(f"Skills extraction failed: {skills_result['errors']}")
+        else:
+            state["ai_extracted_metadata"] = skills_result.get("ai_extracted_metadata")
+        
+        # Generate keywords
+        keywords_result = generate_searchable_keywords_node(state)
+        if keywords_result.get("errors"):
+            logger.error(f"Keywords generation failed: {keywords_result['errors']}")
+        else:
+            state["ai_keywords"] = keywords_result.get("ai_keywords")
+        
+        # Update AI metadata
+        update_result = update_ai_metadata_node(state)
+        if update_result.get("errors"):
+            logger.error(f"AI metadata update failed: {update_result['errors']}")
+        
+        # Create embedding text
+        text_result = create_embedding_text_node(state)
+        if text_result.get("errors"):
+            logger.error(f"Embedding text creation failed: {text_result['errors']}")
+        else:
+            state["embedding_text"] = text_result.get("embedding_text")
+        
+        # Generate embedding
+        vector_result = generate_embedding_node(state)
+        if vector_result.get("errors"):
+            logger.error(f"Embedding generation failed: {vector_result['errors']}")
+        else:
+            state["embedding_vector"] = vector_result.get("embedding_vector")
+            state["embedding_dimension"] = vector_result.get("embedding_dimension")
+            state["embedding_model_name"] = vector_result.get("embedding_model_name")
+        
+        # Store vector
+        store_result = store_vector_node(state)
+        if store_result.get("errors"):
+            logger.error(f"Vector storage failed: {store_result['errors']}")
+        
+        db.refresh(job)
+        logger.info("Full AI workflow completed successfully for job embedding generation")
+        
+    except Exception as e:
+        logger.exception("Failed to run full AI workflow after answer submission")
+        # Don't fail the entire operation if AI workflow fails, just log it
     
     return {"success": True, "job": job}

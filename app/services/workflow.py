@@ -1,9 +1,11 @@
 import json
 import hashlib
 import logging
+import re
 from typing import TypedDict, List, Dict, Any, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
+import enum
 
 from sqlalchemy.orm import Session
 from langgraph.graph import StateGraph, START, END
@@ -12,6 +14,62 @@ from app.core.llm import get_llm, get_embeddings
 from app.models.job import Job, JobEmbedding, EmploymentType, WorkMode, JobStatus
 
 logger = logging.getLogger(__name__)
+
+
+def extract_all_fields_common_fallback(job_description: str, job_title: str = "") -> Dict[str, Any]:
+    """
+    Common AI-based fallback function to extract all missing fields dynamically.
+    Replaces separate regex-based fallback functions with a single AI prompt.
+    """
+    if not job_description:
+        return {}
+    
+    try:
+        llm = get_llm(temperature=0.1)
+    except Exception as e:
+        logger.error(f"Failed to load LLM in common fallback: {e}")
+        return {}
+    
+    prompt = f"""You are an expert recruitment AI. Extract the following information from the job description.
+
+Job Title: {job_title}
+Job Description: {job_description}
+
+Extract these fields if present in the text:
+- job_title: The role name (e.g., "Machine Learning Engineer", "Senior Developer", "Product Manager")
+- responsibilities: Main duties and responsibilities as a single string
+- employment_type: One of these exact values: "Full Time", "Part Time", "Contract", "Internship", "Freelance"
+- work_mode: One of these exact values: "Remote", "Hybrid", "Onsite"
+
+CRITICAL INSTRUCTIONS:
+1. Look ANYWHERE in the text for the role name - beginning, end, middle
+2. For employment_type, map variations to exact values:
+   - "Full-time", "Full time", "full-time", "Full-Time" → "Full Time"
+   - "Part-time", "Part time", "part-time", "Part-Time" → "Part Time"
+   - "Contract", "contractor", "contractual" → "Contract"
+   - "Internship", "intern", "interns" → "Internship"
+   - "Freelance", "freelancer" → "Freelance"
+3. For work_mode, map variations to exact values:
+   - "Remote", "remote work", "work from home", "WFH" → "Remote"
+   - "Hybrid", "hybrid work", "mix of remote and office" → "Hybrid"
+   - "On-site", "Onsite", "Office", "in-office", "in person" → "Onsite"
+4. Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
+5. Handle informal language, typos, and variations intelligently
+
+Return a JSON object with the field names as keys. If a field cannot be found, set it to null.
+
+Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
+"""
+    
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        extracted_data = parse_json_response(text)
+        logger.info(f"Common AI fallback extracted: {list(extracted_data.keys())}")
+        return extracted_data
+    except Exception as e:
+        logger.error(f"Error in common AI fallback: {e}")
+        return {}
 
 class JobWorkflowState(TypedDict):
     job_id: Optional[UUID]
@@ -164,15 +222,188 @@ def parse_json_response(content: str) -> Dict[str, Any]:
                 pass
         raise e
 
+
+def extract_missing_fields_node(state: JobWorkflowState) -> Dict[str, Any]:
+    """
+    Use AI to extract missing fields from job_description before asking questions.
+    This improves accuracy by attempting to extract information from the text first.
+    """
+    logger.info("LangGraph Node: extract_missing_fields")
+    
+    from app.core.job_settings import get_fields_to_ask, get_field_config
+    
+    input_data = state["input_data"]
+    job_description = input_data.get('job_description', '')
+    job_title = input_data.get('job_title', '')
+    
+    if not job_description:
+        return {"input_data": input_data}
+    
+    fields_to_ask = get_fields_to_ask()
+    missing_fields = []
+    
+    for field_config in fields_to_ask:
+        field_name = field_config["field_name"]
+        value = input_data.get(field_name)
+        if is_insufficient_data(value):
+            missing_fields.append((field_name, field_config))
+    
+    if is_insufficient_data(job_title) and job_description:
+        missing_fields.append(("job_title", {"field_name": "job_title", "description": "Job title/role", "field_type": "string", "extraction_prompt": "Extract the job title or role name"}))
+    
+    if not missing_fields:
+        return {"input_data": input_data}
+    
+    try:
+        llm = get_llm(temperature=0.1)
+    except Exception as e:
+        logger.error(f"Failed to load LLM in extract_missing_fields: {e}")
+        return {"input_data": input_data}
+    
+    field_descriptions = []
+    for field_name, field_config in missing_fields:
+        extraction_prompt = field_config.get("extraction_prompt", f"Extract the {field_config['description'].lower()}")
+        field_type = field_config.get("field_type", "string")
+        field_descriptions.append(f"- {field_name} ({field_type}): {extraction_prompt}")
+    
+    prompt = f"""You are an expert recruitment AI. Extract the following information from the job description and title.
+
+Job Title: {job_title}
+Job Description: {job_description}
+
+Extract the following fields if present in the text:
+{chr(10).join(field_descriptions)}
+
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+
+1. **job_title**: Look ANYWHERE in the text for the role name. Common patterns:
+   - "We are looking for a [ROLE]"
+   - "Hiring a [ROLE]"
+   - "Position: [ROLE]"
+   - "Role: [ROLE]"
+   - "[ROLE] needed"
+   - "Apply for [ROLE]"
+   - The role mentioned at the beginning or end of description
+   - Examples: "Machine Learning Engineer", "Senior Developer", "Product Manager", "Data Scientist", "Frontend Developer"
+
+2. **responsibilities**: Look for bullet points, numbered lists, or sentences starting with verbs:
+   - "You will be responsible for..."
+   - "Your duties include..."
+   - "Key responsibilities:"
+   - "What you'll do:"
+   - Bullet points describing tasks
+   - Extract the main responsibilities as a single string
+
+3. **required_skills**: Look for:
+   - "Required skills:" or "Must have:"
+   - "Skills needed:" or "Qualifications:"
+   - Technical terms, programming languages, tools mentioned
+   - "Experience with [skill]"
+   - Extract as comma-separated list
+
+4. **department**: Look for:
+   - "Department:" or "Team:"
+   - "Join our [department] team"
+   - "Engineering", "Marketing", "Sales", "Product", "Design", etc.
+
+5. **employment_type**: Look for these EXACT keywords and map them:
+   - "Full-time", "Full time", "full-time", "Full-Time" → "Full Time"
+   - "Part-time", "Part time", "part-time", "Part-Time" → "Part Time"
+   - "Contract", "contractor", "contractual" → "Contract"
+   - "Internship", "intern", "interns" → "Internship"
+   - "Freelance", "freelancer" → "Freelance"
+
+6. **work_mode**: Look for these EXACT keywords and map them:
+   - "Remote", "remote work", "work from home", "WFH" → "Remote"
+   - "Hybrid", "hybrid work", "mix of remote and office" → "Hybrid"
+   - "On-site", "Onsite", "Office", "in-office", "in person" → "Onsite"
+
+IMPORTANT: 
+- Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
+- Handle informal language, typos, and variations
+- The description may be in casual human language - extract intelligently
+- If a field is mentioned even indirectly, extract it
+- For employment_type and work_mode, ALWAYS use the exact mapped values above
+
+Return a JSON object with the field names as keys. For list fields, return an array of strings.
+For enum fields (employment_type, work_mode), use ONLY the mapped values specified above.
+If a field cannot be found in the text, set it to null.
+
+Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
+"""
+    
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        logger.info(f"LLM extraction response: {text[:500]}...")
+        extracted_data = parse_json_response(text)
+        logger.info(f"Parsed extracted data: {extracted_data}")
+        
+        # Update input_data with extracted values
+        updated_input_data = input_data.copy()
+        for field_name, value in extracted_data.items():
+            if value is not None and not is_insufficient_data(value):
+                # Handle enum values
+                field_config = get_field_config(field_name)
+                if field_config and field_config.get("field_type") == "enum":
+                    allowed_values = field_config.get("allowed_values", [])
+                    if isinstance(value, str):
+                        # Try to match case-insensitively for enum values
+                        for allowed in allowed_values:
+                            if allowed.lower() == value.lower():
+                                updated_input_data[field_name] = allowed
+                                logger.info(f"Matched enum {field_name}: {value} -> {allowed}")
+                                break
+                        else:
+                            # Keep original if no match
+                            if value in allowed_values:
+                                updated_input_data[field_name] = value
+                                logger.info(f"Enum {field_name} already valid: {value}")
+                else:
+                    updated_input_data[field_name] = value
+                    logger.info(f"Extracted {field_name}: {value}")
+        
+        logger.info(f"Final extracted fields: {list(extracted_data.keys())}")
+        logger.info(f"Updated input_data keys: {list(updated_input_data.keys())}")
+        
+        # Fallback: If any fields are still missing, try common AI extraction
+        missing_fields = ["job_title", "responsibilities", "employment_type", "work_mode"]
+        if any(is_insufficient_data(updated_input_data.get(field)) for field in missing_fields) and job_description:
+            logger.info("AI extraction failed for some fields, trying common AI fallback")
+            fallback_data = extract_all_fields_common_fallback(job_description, job_title)
+            for field_name, value in fallback_data.items():
+                if value and not is_insufficient_data(value):
+                    updated_input_data[field_name] = value
+                    logger.info(f"Successfully extracted {field_name} using common fallback: {value}")
+        
+        return {"input_data": updated_input_data}
+        
+    except Exception as e:
+        logger.error(f"Error invoking LLM in extract_missing_fields: {e}")
+        logger.error(f"LLM response was: {text if 'text' in locals() else 'N/A'}")
+        
+        # Fallback: Try common AI extraction even if AI failed completely
+        missing_fields = ["job_title", "responsibilities", "employment_type", "work_mode"]
+        if any(is_insufficient_data(input_data.get(field)) for field in missing_fields) and job_description:
+            logger.info("AI extraction failed completely, trying common AI fallback")
+            fallback_data = extract_all_fields_common_fallback(job_description, job_title)
+            for field_name, value in fallback_data.items():
+                if value and not is_insufficient_data(value):
+                    input_data[field_name] = value
+                    logger.info(f"Successfully extracted {field_name} using common fallback after AI failure: {value}")
+        
+        return {"input_data": input_data}
+
 def validate_input_node(state: JobWorkflowState) -> Dict[str, Any]:
     logger.info("LangGraph Node: validate_input")
     input_data = state.get("input_data", {})
     errors = []
 
-    if not input_data.get("job_title"):
-        errors.append("job_title is required")
     if not input_data.get("job_description"):
         errors.append("job_description is required")
+    
+    if not input_data.get("job_title"):
+        logger.info("job_title missing, will attempt extraction from description")
 
     if errors:
         return {"errors": errors}
@@ -196,12 +427,14 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
     try:
         employment_type = EmploymentType(employment_type_str) if employment_type_str else EmploymentType.FULL_TIME
     except (ValueError, KeyError):
+        logger.warning(f"Invalid employment_type value: {employment_type_str}, using default")
         employment_type = EmploymentType.FULL_TIME
 
     work_mode_str = input_data.get("work_mode", "")
     try:
         work_mode = WorkMode(work_mode_str) if work_mode_str else WorkMode.ONSITE
     except (ValueError, KeyError):
+        logger.warning(f"Invalid work_mode value: {work_mode_str}, using default")
         work_mode = WorkMode.ONSITE
 
     status = JobStatus.DRAFT
@@ -218,11 +451,24 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
     if not job:
         from app.core.job_settings import get_all_fields, get_default_value
         
+        job_title = input_data.get("job_title")
+        if not job_title or is_insufficient_data(job_title):
+            logger.warning("job_title missing after extraction, trying common AI fallback")
+            job_description = input_data.get("job_description", "")
+            fallback_data = extract_all_fields_common_fallback(job_description, job_title)
+            fallback_title = fallback_data.get("job_title")
+            if fallback_title and not is_insufficient_data(fallback_title):
+                job_title = fallback_title
+                logger.info(f"Successfully extracted job_title using common fallback in store_job: {fallback_title}")
+            else:
+                job_title = "Untitled Position"
+                logger.warning("job_title still missing after fallback, using placeholder")
+        
         job_data = {
             "job_id": job_id or uuid4(),
             "company_id": state["company_id"],
             "created_by": state["created_by"],
-            "job_title": input_data["job_title"],
+            "job_title": job_title,
             "job_code": input_data.get("job_code", ""),
             "currency": input_data.get("currency", "USD"),
             "vacancies": input_data.get("vacancies", 1),
@@ -611,6 +857,7 @@ def should_proceed_after_store(state: JobWorkflowState) -> str:
 workflow = StateGraph(JobWorkflowState)
 
 workflow.add_node("validate_input", validate_input_node)
+workflow.add_node("extract_missing_fields", extract_missing_fields_node)
 workflow.add_node("check_data_sufficiency", generate_clarifying_questions_node)
 workflow.add_node("store_job", store_job_node)
 workflow.add_node("generate_ai_summary", generate_ai_summary_node)
@@ -622,7 +869,8 @@ workflow.add_node("store_vector", store_vector_node)
 workflow.add_node("update_ai_metadata", update_ai_metadata_node)
 
 workflow.add_edge(START, "validate_input")
-workflow.add_edge("validate_input", "check_data_sufficiency")
+workflow.add_edge("validate_input", "extract_missing_fields")
+workflow.add_edge("extract_missing_fields", "check_data_sufficiency")
 
 workflow.add_conditional_edges(
     "check_data_sufficiency",
