@@ -9,26 +9,6 @@ JOB_FIELDS = [
         "extraction_prompt": "Extract the department name"
     },
     {
-        "field_name": "employment_type",
-        "description": "Employment Type",
-        "default_value": "Full Time",
-        "ask_question": True,
-        "allowed_values": ["Full Time", "Part Time", "Contract", "Internship"],
-        "prompt_template": "Is this position Full Time, Part Time, Contract, or Internship?",
-        "field_type": "enum",
-        "extraction_prompt": "Extract the employment type"
-    },
-    {
-        "field_name": "work_mode",
-        "description": "Work Mode",
-        "default_value": "Hybrid",
-        "ask_question": True,
-        "allowed_values": ["Remote", "Hybrid", "Onsite"],
-        "prompt_template": "Is this role Remote, Hybrid, or Onsite?",
-        "field_type": "enum",
-        "extraction_prompt": "Extract the work mode"
-    },
-    {
         "field_name": "responsibilities",
         "description": "Job responsibilities",
         "default_value": "",
@@ -57,56 +37,17 @@ JOB_FIELDS = [
     {
         "field_name": "experience_max",
         "description": "Maximum experience in years",
-        "default_value": 10,
+        "default_value": None,
         "ask_question": False,
         "field_type": "integer",
         "extraction_prompt": "Extract the maximum years of experience"
     },
     {
-        "field_name": "salary_min",
-        "description": "Minimum salary",
-        "default_value": 0.0,
-        "ask_question": False,
-        "field_type": "float",
-        "extraction_prompt": "Extract the minimum salary"
-    },
-    {
-        "field_name": "salary_max",
-        "description": "Maximum salary",
-        "default_value": 0.0,
-        "ask_question": False,
-        "field_type": "float",
-        "extraction_prompt": "Extract the maximum salary"
-    },
-    {
-        "field_name": "location_country",
-        "description": "Country",
-        "default_value": "",
-        "ask_question": False,
-        "field_type": "string",
-        "extraction_prompt": "Extract the country location"
-    },
-    {
-        "field_name": "location_state",
-        "description": "State/Region",
-        "default_value": "",
-        "ask_question": False,
-        "field_type": "string",
-        "extraction_prompt": "Extract the state or region"
-    },
-    {
-        "field_name": "location_city",
-        "description": "City",
-        "default_value": "",
-        "ask_question": False,
-        "field_type": "string",
-        "extraction_prompt": "Extract the city location"
-    },
-    {
         "field_name": "education_requirements",
         "description": "Education requirements",
         "default_value": "",
-        "ask_question": False,
+        "ask_question": True,
+        "prompt_template": "What are the education requirements for this position?",
         "field_type": "string",
         "extraction_prompt": "Extract the education requirements"
     },
