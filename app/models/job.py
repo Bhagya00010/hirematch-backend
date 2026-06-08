@@ -9,20 +9,6 @@ from pgvector.sqlalchemy import Vector
 from app.db.base import Base
 
 
-class EmploymentType(str, enum.Enum):
-    FULL_TIME = "Full Time"
-    PART_TIME = "Part Time"
-    CONTRACT = "Contract"
-    INTERNSHIP = "Internship"
-    FREELANCE = "Freelance"
-
-
-class WorkMode(str, enum.Enum):
-    REMOTE = "Remote"
-    HYBRID = "Hybrid"
-    ONSITE = "Onsite"
-
-
 class JobStatus(str, enum.Enum):
     DRAFT = "Draft"
     ACTIVE = "Active"
@@ -50,39 +36,13 @@ class Job(Base):
     job_code: Mapped[str] = mapped_column(String(100), nullable=False)
     department: Mapped[str] = mapped_column(String(150), nullable=False)
 
-    employment_type: Mapped[EmploymentType] = mapped_column(
-        Enum(
-            EmploymentType,
-            name="employment_type",
-            values_callable=lambda types: [t.value for t in types],
-        ),
-        nullable=False,
-    )
-    work_mode: Mapped[WorkMode] = mapped_column(
-        Enum(
-            WorkMode,
-            name="work_mode",
-            values_callable=lambda modes: [m.value for m in modes],
-        ),
-        nullable=False,
-    )
-
-    experience_min: Mapped[int] = mapped_column(Integer, nullable=False)
-    experience_max: Mapped[int] = mapped_column(Integer, nullable=False)
-    salary_min: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    salary_max: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
+    experience_min: Mapped[int] = mapped_column(Integer, nullable=True)
+    experience_max: Mapped[int] = mapped_column(Integer, nullable=True)
     vacancies: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-
-    location_country: Mapped[str] = mapped_column(String(100), nullable=False)
-    location_state: Mapped[str] = mapped_column(String(100), nullable=False)
-    location_city: Mapped[str] = mapped_column(String(100), nullable=False)
-    notice_period_max: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
 
     job_description: Mapped[str] = mapped_column(Text, nullable=False)
     responsibilities: Mapped[str] = mapped_column(Text, nullable=False)
     required_skills: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
-    preferred_skills: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     education_requirements: Mapped[str] = mapped_column(Text, nullable=False)
     certifications: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
 
@@ -99,17 +59,10 @@ class Job(Base):
     industry: Mapped[str | None] = mapped_column(String(150), nullable=True)
     team_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     project_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    benefits: Mapped[str | None] = mapped_column(Text, nullable=True)
-    working_hours: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    shift_details: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    travel_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
-    relocation_support: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
-    visa_sponsorship: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_required_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True, default=list)
-    ai_preferred_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True, default=list)
     ai_job_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_seniority_level: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_keywords: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True, default=list)

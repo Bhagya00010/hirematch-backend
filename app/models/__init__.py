@@ -1,7 +1,6 @@
 from app.models.token import PasswordResetToken, RefreshToken
 from app.models.user import User, UserRole
 from app.models.settings import Settings
-from app.models.job import Job, JobEmbedding, EmploymentType, WorkMode, JobStatus
 from app.models.resume import (
     Candidate,
     CandidateEmbedding,
@@ -10,6 +9,7 @@ from app.models.resume import (
     ResumeProcessingStatus,
     ResumeValidationStatus,
 )
+from app.models.job import Job, JobEmbedding, JobStatus
 
 __all__ = [
     "PasswordResetToken",
@@ -19,8 +19,6 @@ __all__ = [
     "Settings",
     "Job",
     "JobEmbedding",
-    "EmploymentType",
-    "WorkMode",
     "JobStatus",
     "ResumeFile",
     "Candidate",
@@ -29,4 +27,3 @@ __all__ = [
     "ResumeProcessingStatus",
     "ResumeValidationStatus",
 ]
-
