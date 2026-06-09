@@ -45,7 +45,7 @@ def _extract_refresh_token(
 
 
 @router.post("/register", response_model=APIResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db), _: None = Depends(RateLimiter(limit=5, window_seconds=60)),) -> APIResponse:
+def register(payload: RegisterRequest, db: Session = Depends(get_db),  _: None = Depends(register_rate_limiter),) -> APIResponse:
     try:
         user = auth_service.create_user(
             db,
@@ -71,7 +71,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db), _: None = 
 
 
 @router.post("/login", response_model=APIResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db),_: None = Depends(RateLimiter(limit=5, window_seconds=60)),) -> APIResponse:
+def login(payload: LoginRequest, db: Session = Depends(get_db),_: None = Depends(login_rate_limiter),) -> APIResponse:
     user = auth_service.authenticate_user(
         db,
         email=str(payload.email),
@@ -97,7 +97,7 @@ def refresh_access_token(
     payload: RefreshRequest,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-    _: None = Depends(RateLimiter(limit=10, window_seconds=60)),
+    _: None = Depends(refresh_rate_limiter),
 ) -> APIResponse:
     refresh_token = _extract_refresh_token(
         payload.refresh_token, authorization)
@@ -129,6 +129,7 @@ def logout(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    __: None = Depends(refresh_rate_limiter),
 ) -> APIResponse:
     refresh_token = _extract_refresh_token(
         payload.refresh_token, authorization)
@@ -143,7 +144,7 @@ def logout(
 
 
 @router.post("/forgot-password", response_model=APIResponse)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db),_: None = Depends(RateLimiter(limit=3, window_seconds=300)),) -> APIResponse:
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db),_: None = Depends(forgot_password_rate_limiter),) -> APIResponse:
     user = auth_service.get_user_by_email(db, str(payload.email))
     if user is not None and user.is_active:
 
@@ -157,7 +158,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 
 
 @router.post("/reset-password", response_model=APIResponse)
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db),_: None = Depends(RateLimiter(limit=3, window_seconds=300)),) -> APIResponse:
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db),_: None = Depends(reset_password_rate_limiter),) -> APIResponse:
     is_reset = auth_service.reset_password(
         db,
         token=payload.token,
