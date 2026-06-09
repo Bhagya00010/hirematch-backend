@@ -51,18 +51,31 @@ class RateLimiter:
     def _get_key(self, request: Request) -> str:
         return f"{self.key_prefix}:{self._get_identity(request)}:{request.url.path}"
 
+    # MOVE THIS HERE
+    def _cleanup_expired(self, now: float) -> None:
+        expired = [
+            key
+            for key, record in self._store.items()
+            if record.reset_at <= now
+        ]
+
+        for key in expired:
+            self._store.pop(key, None)
+
     async def __call__(self, request: Request) -> None:
         key = self._get_key(request)
         now = time.time()
+
+        self._cleanup_expired(now)
+
         record = self._store.get(key)
 
-        if record is None or record.reset_at <= now:
-            self._store.pop(key, None)
-
+        if record is None:
             record = RateLimitRecord(
                 remaining=self.limit,
                 reset_at=now + self.window_seconds,
             )
+
         if record.remaining <= 0:
             retry_after = int(max(record.reset_at - now, 0))
             raise HTTPException(
@@ -78,25 +91,15 @@ class RateLimiter:
         record.remaining -= 1
         self._store[key] = record
 
-      # Auth APIs
+
+# Auth APIs
 register_rate_limiter = RateLimiter(limit=5, window_seconds=60)
 login_rate_limiter = RateLimiter(limit=5, window_seconds=60)
 refresh_rate_limiter = RateLimiter(limit=10, window_seconds=60)
 forgot_password_rate_limiter = RateLimiter(limit=3, window_seconds=300)
 reset_password_rate_limiter = RateLimiter(limit=3, window_seconds=300)
 
-# Generic API limiters
+# Generic APIs
 read_rate_limiter = RateLimiter(limit=100, window_seconds=60)
 write_rate_limiter = RateLimiter(limit=30, window_seconds=60)
 heavy_rate_limiter = RateLimiter(limit=10, window_seconds=60)
-
-
-def _cleanup_expired(self, now: float) -> None:
-    expired = [
-        key
-        for key, record in self._store.items()
-        if record.reset_at <= now
-    ]
-
-    for key in expired:
-        self._store.pop(key, None)

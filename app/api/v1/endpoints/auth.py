@@ -2,17 +2,15 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api.ratelimit import (
-    register_rate_limiter,
-    login_rate_limiter,
-    refresh_rate_limiter,
     forgot_password_rate_limiter,
-    reset_password_rate_limiter,
+    login_rate_limiter,
     read_rate_limiter,
+    refresh_rate_limiter,
+    register_rate_limiter,
+    reset_password_rate_limiter,
     write_rate_limiter,
-    heavy_rate_limiter,
 )
 from app.api.deps import get_current_user
-#from app.api.ratelimit import RateLimiter
 from app.core.security import get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.user import User
