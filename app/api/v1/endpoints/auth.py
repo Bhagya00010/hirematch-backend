@@ -173,7 +173,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db),
 
 
 @router.get("/me", response_model=APIResponse)
-def get_me(current_user: User = Depends(get_current_user)) -> APIResponse:
+def get_me(current_user: User = Depends(get_current_user), _: None = Depends(read_rate_limiter),) -> APIResponse:
     return APIResponse(data=UserOut.model_validate(current_user).model_dump(mode="json"))
 
 
@@ -182,6 +182,7 @@ def update_me(
     payload: UpdateMeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(write_rate_limiter),
 ) -> APIResponse:
     if payload.full_name is not None:
         current_user.full_name = payload.full_name.strip()

@@ -89,3 +89,14 @@ reset_password_rate_limiter = RateLimiter(limit=3, window_seconds=300)
 read_rate_limiter = RateLimiter(limit=100, window_seconds=60)
 write_rate_limiter = RateLimiter(limit=30, window_seconds=60)
 heavy_rate_limiter = RateLimiter(limit=10, window_seconds=60)
+
+
+def _cleanup_expired(self, now: float) -> None:
+    expired = [
+        key
+        for key, record in self._store.items()
+        if record.reset_at <= now
+    ]
+
+    for key in expired:
+        self._store.pop(key, None)
