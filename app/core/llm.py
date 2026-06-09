@@ -5,7 +5,9 @@ from abc import ABC, abstractmethod
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
 from app.core.config import settings
+from dotenv import load_dotenv
 
+load_dotenv() 
 logger = logging.getLogger(__name__)
 
 
