@@ -46,6 +46,12 @@ CRITICAL INSTRUCTIONS:
 4. Look for patterns like "responsible for", "duties", "tasks", "you will", "key responsibilities"
 5. Handle informal language, typos, and variations intelligently
 6. Better to extract something than nothing
+7. CRITICAL FOR RESPONSIBILITIES: 
+   - If you see "responsible for [X], [Y], and [Z]", extract ALL of them
+   - If you see "Key responsibilities include [list]", extract the entire list
+   - If you see "You will [action]", extract that as a responsibility
+   - Combine all responsibility sentences into one comprehensive paragraph
+   - Even if responsibilities are embedded in a longer sentence, extract them
 
 Return a JSON object with the field names as keys. If a field truly cannot be found, set it to null.
 
@@ -139,6 +145,38 @@ def generate_clarifying_questions_node(state: JobWorkflowState) -> Dict[str, Any
     
     field_name, description, value, field_config = insufficient_fields[0]
     prompt_template = field_config.get("prompt_template", f"Please provide the {description.lower()}")
+    
+    # Special handling for responsibilities - check if JD already contains them
+    job_description = input_data.get('job_description', '')
+    if field_name == "responsibilities" and job_description:
+        # Check if JD contains responsibility keywords
+        responsibility_keywords = ['responsible for', 'responsibilities include', 'key responsibilities', 'you will', 'duties include', 'day-to-day']
+        has_responsibilities = any(keyword.lower() in job_description.lower() for keyword in responsibility_keywords)
+        
+        if has_responsibilities:
+            logger.info(f"JD contains responsibility keywords, attempting extraction instead of asking")
+            # Try to extract from JD one more time with a focused prompt
+            extraction_prompt = f"""Extract ALL job responsibilities from this job description. 
+Look for phrases like: responsible for, responsibilities include, key responsibilities, you will, duties include.
+
+Job Description: {job_description}
+
+Extract and return ONLY the responsibilities as a single comprehensive paragraph. 
+If no clear responsibilities are found, return null."""
+            
+            try:
+                response = llm.invoke(extraction_prompt)
+                extracted = response.content if hasattr(response, 'content') else str(response)
+                extracted = extracted.strip()
+                
+                if extracted and len(extracted) > 50 and extracted.lower() != 'null':
+                    logger.info(f"Successfully extracted responsibilities: {extracted[:100]}...")
+                    # Update the input data with extracted value
+                    updated_input = input_data.copy()
+                    updated_input[field_name] = extracted
+                    return {"input_data": updated_input, "needs_clarification": False, "questions": []}
+            except Exception as e:
+                logger.error(f"Failed to extract responsibilities: {e}")
     
     prompt = f"""You are an expert recruitment assistant. Analyze the following job data and generate ONE specific clarifying question.
 
@@ -285,6 +323,9 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
    - Extract ALL responsibilities as a comprehensive single string
    - If multiple sentences, combine them into one paragraph
    - Look for patterns like "include [list of tasks]" and extract the entire list
+   - CRITICAL: Even if responsibilities are embedded in a sentence like "The ideal candidate will be responsible for designing, developing, and maintaining...", extract ALL of them
+   - Look for phrases like "Key responsibilities include" and extract everything after that
+   - If the JD says "responsible for [X], [Y], and [Z]", extract all three as responsibilities
 
 3. **required_skills**: Look for ANY technical skills mentioned:
    - "skills", "technologies", "proficient in", "experience with"

@@ -13,9 +13,9 @@ JOB_FIELDS = [
         "description": "Job responsibilities",
         "default_value": "",
         "ask_question": True,
-        "prompt_template": "What are the key responsibilities for this role?",
+        "prompt_template": "The job description mentions some responsibilities. Are there any additional specific day-to-day tasks or responsibilities not covered in the description?",
         "field_type": "string",
-        "extraction_prompt": "Extract the job responsibilities"
+        "extraction_prompt": "Extract ALL job responsibilities mentioned in the description. Look for phrases like 'responsible for', 'responsibilities include', 'you will', 'key responsibilities', 'duties include', 'day-to-day', 'what you'll do'. Extract the complete list of responsibilities as a comprehensive paragraph."
     },
     {
         "field_name": "required_skills",
