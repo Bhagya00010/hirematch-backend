@@ -1,6 +1,14 @@
 from app.models.token import PasswordResetToken, RefreshToken
 from app.models.user import User, UserRole
 from app.models.settings import Settings
+from app.models.resume import (
+    Candidate,
+    CandidateEmbedding,
+    MatchResult,
+    ResumeFile,
+    ResumeProcessingStatus,
+    ResumeValidationStatus,
+)
 from app.models.job import Job, JobEmbedding, JobStatus
 
 __all__ = [
@@ -12,5 +20,10 @@ __all__ = [
     "Job",
     "JobEmbedding",
     "JobStatus",
+    "ResumeFile",
+    "Candidate",
+    "CandidateEmbedding",
+    "MatchResult",
+    "ResumeProcessingStatus",
+    "ResumeValidationStatus",
 ]
-
