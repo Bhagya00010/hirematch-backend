@@ -41,10 +41,13 @@ Extract these fields if present in the text:
 
 CRITICAL INSTRUCTIONS:
 1. Look ANYWHERE in the text for the role name - beginning, end, middle
-2. Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
-3. Handle informal language, typos, and variations intelligently
+2. Be EXTREMELY AGGRESSIVE in extraction - if you see ANY hint of information, extract it
+3. For responsibilities: extract ALL sentences describing work, even if not explicitly labeled
+4. Look for patterns like "responsible for", "duties", "tasks", "you will", "key responsibilities"
+5. Handle informal language, typos, and variations intelligently
+6. Better to extract something than nothing
 
-Return a JSON object with the field names as keys. If a field cannot be found, set it to null.
+Return a JSON object with the field names as keys. If a field truly cannot be found, set it to null.
 
 Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
 """
@@ -274,20 +277,21 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
    - The role mentioned at the beginning or end of description
    - Examples: "Machine Learning Engineer", "Senior Developer", "Product Manager", "Data Scientist", "Frontend Developer"
 
-2. **responsibilities**: Look for bullet points, numbered lists, or sentences starting with verbs:
-   - "You will be responsible for..."
-   - "Your duties include..."
-   - "Key responsibilities:"
-   - "What you'll do:"
-   - Bullet points describing tasks
-   - Extract the main responsibilities as a single string
+2. **responsibilities**: Look for ANY text describing what the person will do:
+   - "responsible for", "responsibilities", "duties", "tasks"
+   - "You will", "Your role", "Key responsibilities"
+   - "What you'll do", "Day-to-day"
+   - Sentences with action verbs (design, develop, build, create, manage, lead)
+   - Extract ALL responsibilities as a comprehensive single string
+   - If multiple sentences, combine them into one paragraph
+   - Look for patterns like "include [list of tasks]" and extract the entire list
 
-3. **required_skills**: Look for:
-   - "Required skills:" or "Must have:"
-   - "Skills needed:" or "Qualifications:"
-   - Technical terms, programming languages, tools mentioned
-   - "Experience with [skill]"
+3. **required_skills**: Look for ANY technical skills mentioned:
+   - "skills", "technologies", "proficient in", "experience with"
+   - "knowledge of", "must have", "required", "expertise in"
+   - Programming languages, frameworks, tools, databases
    - Extract as comma-separated list
+   - Include ALL technical terms mentioned even if not explicitly labeled as skills
 
 4. **education_requirements**: Look for:
    - "Education:" or "Qualifications:" or "Requirements:"
@@ -296,10 +300,11 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
    - "Educational requirements"
    - Extract as a single string
 
-5. **department**: Look for:
-   - "Department:" or "Team:"
-   - "Join our [department] team"
-   - "Engineering", "Marketing", "Sales", "Product", "Design", etc.
+5. **department**: Look for department/team information:
+   - "department", "team", "join our"
+   - Common departments: Engineering, Marketing, Sales, Product, Design, etc.
+   - Look for phrases like "Engineering team", "join our [department] team"
+   - Extract the department name
 
 6. **experience_min**: Look for:
    - "X+ years experience", "Minimum X years", "At least X years"
@@ -316,16 +321,19 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
    - Specific certification names (e.g., "AWS", "PMP", "Scrum")
    - Extract as comma-separated list
 
-IMPORTANT: 
-- Be AGGRESSIVE in extraction - if you see ANY hint of information, extract it
-- Handle informal language, typos, and variations
-- The description may be in casual human language - extract intelligently
-- If a field is mentioned even indirectly, extract it
-- For experience, extract numbers only (no "years", no text)
+MOST IMPORTANT:
+- Be EXTREMELY AGGRESSIVE in extraction
+- If you see ANY hint of information, EXTRACT IT
+- The job description may be informal - extract intelligently
+- For responsibilities: extract ALL sentences describing work, combine into comprehensive paragraph
+- For skills: extract ALL technical terms mentioned
+- If information is clearly present but not in exact format, still extract it
+- Better to extract something than nothing
+- Only set field to null if information is truly absent
 
 Return a JSON object with the field names as keys. For list fields, return an array of strings.
 For numeric fields (experience_min, experience_max), return numbers only.
-If a field cannot be found in the text, set it to null.
+If a field truly cannot be found, set it to null - but only as a last resort.
 
 Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
 """
@@ -436,9 +444,9 @@ def store_job_node(state: JobWorkflowState) -> Dict[str, Any]:
         from app.core.job_settings import get_all_fields, get_default_value
         
         job_title = input_data.get("job_title")
+        job_description = input_data.get("job_description", "")
         if not job_title or is_insufficient_data(job_title):
             logger.warning("job_title missing after extraction, trying common AI fallback")
-            job_description = input_data.get("job_description", "")
             fallback_data = extract_all_fields_common_fallback(job_description, job_title)
             fallback_title = fallback_data.get("job_title")
             if fallback_title and not is_insufficient_data(fallback_title):
@@ -539,15 +547,31 @@ def generate_ai_summary_node(state: JobWorkflowState) -> Dict[str, Any]:
         logger.error(f"Failed to load LLM in generate_ai_summary: {e}")
         return {"errors": [f"LLM Provider Error: {e}"]}
 
-    prompt = f"""You are an AI assistant for recruiters. Write a professional, concise summary (2-3 sentences) of the following job description:
+    prompt = f"""You are an expert recruitment AI analyst. Perform a deep analysis of this job posting and create a comprehensive summary that captures the essence of the role.
 
 Job Title: {input_data.get('job_title')}
 Department: {input_data.get('department')}
 Description: {input_data.get('job_description')}
 Responsibilities: {input_data.get('responsibilities')}
+Required Skills: {', '.join(input_data.get('required_skills', []))}
+Education Requirements: {input_data.get('education_requirements')}
+Experience: {input_data.get('experience_min')} to {input_data.get('experience_max')} years
+
+ANALYSIS INSTRUCTIONS:
+1. Understand the core purpose of this role - what problems will this person solve?
+2. Identify the key technical domains and expertise areas required
+3. Understand the level of seniority and responsibility
+4. Capture the unique aspects that make this role specific
+5. Note any specialized knowledge, tools, or methodologies
+
+Create a 3-4 sentence summary that:
+- Describes the role's core function and impact
+- Highlights the primary technical domains and expertise
+- Indicates the seniority level and key responsibilities
+- Mentions critical technologies or methodologies
 
 Example Summary:
-"Senior Backend Engineer with 3-5 years experience in Python, FastAPI and PostgreSQL. Strong understanding of REST APIs, Docker and cloud deployment preferred."
+"Senior Backend Engineer responsible for designing and implementing scalable microservices architecture using Python, FastAPI, and PostgreSQL. Role requires 3-5 years of experience in distributed systems, with expertise in REST APIs, Docker containerization, and cloud deployment on AWS. Will lead technical decisions for high-traffic systems and mentor junior developers on best practices."
 
 Write ONLY the summary. Do not include any greeting, introduction, conversational filler, or markdown block code.
 """
@@ -571,32 +595,59 @@ def extract_skills_node(state: JobWorkflowState) -> Dict[str, Any]:
     except Exception as e:
         return {"errors": [f"LLM Provider Error: {e}"]}
 
-    prompt = f"""You are an expert recruitment AI. Extract details from the following job description:
+    prompt = f"""You are an expert recruitment AI analyst. Perform a deep semantic analysis of this job posting to extract comprehensive skills and role understanding.
 
 Job Title: {input_data.get('job_title')}
+Department: {input_data.get('department')}
 Description: {input_data.get('job_description')}
 Responsibilities: {input_data.get('responsibilities')}
 Education Requirements: {input_data.get('education_requirements')}
 Certifications: {', '.join(input_data.get('certifications', []))}
 Required Skills: {', '.join(input_data.get('required_skills', []))}
+Experience: {input_data.get('experience_min')} to {input_data.get('experience_max')} years
+
+DEEP ANALYSIS INSTRUCTIONS:
+1. **Role Responsibility Analysis**: Understand what the person will actually DO day-to-day. Extract skills based on actual tasks, not just keywords.
+2. **Technical Depth**: Identify not just skill names, but the depth of knowledge required (e.g., "basic Python" vs "advanced Python with asyncio").
+3. **Skill Relationships**: Understand how skills relate to each other - which are foundational vs which are specialized.
+4. **Implicit Skills**: Extract skills that are implied by responsibilities even if not explicitly listed.
+5. **Domain Context**: Understand the industry/domain context to extract relevant domain-specific skills.
 
 Return a JSON object with the following keys. Values MUST be lists of strings unless specified otherwise:
-- primary_skills: key technical skills/languages needed.
-- secondary_skills: other helpful skills.
-- mandatory_skills: absolute must-have skills.
-- nice_to_have_skills: preferred/optional skills.
-- tools: software tools mentioned.
-- frameworks: libraries/frameworks mentioned.
-- databases: database systems mentioned.
-- cloud_technologies: cloud platforms/services.
-- soft_skills: interpersonal/soft skills.
-- domain_experience: industries/domains mentioned.
-- seniority_level: string (e.g. Junior, Mid, Senior, Lead, Executive).
-- job_category: string (e.g. Engineering, Sales, Product, Marketing, Finance).
-- education: string (e.g. Bachelor's in CS, High School).
-- certifications: list of certifications.
-- years_experience: range or string (e.g. "3-5 years").
-- location_preferences: location requirements/preferences.
+
+TECHNICAL SKILLS:
+- primary_skills: core technical skills that are absolutely essential for this role
+- secondary_skills: supporting technical skills that are important but not deal-breakers
+- mandatory_skills: non-negotiable requirements - candidate MUST have these
+- nice_to_have_skills: preferred skills that would make a candidate stand out
+
+TECHNOLOGY STACK:
+- tools: software tools, IDEs, development tools, productivity tools
+- frameworks: libraries, frameworks, SDKs mentioned or implied
+- databases: database systems, data stores, caching layers
+- cloud_technologies: cloud platforms (AWS, GCP, Azure), services, serverless
+
+SOFT SKILLS & LEADERSHIP:
+- soft_skills: interpersonal, communication, collaboration skills
+- leadership_skills: management, mentoring, decision-making skills (if applicable)
+- problem_solving: analytical, critical thinking, problem-solving approaches
+
+ROLE CONTEXT:
+- seniority_level: string (e.g. Junior, Mid, Senior, Lead, Principal, Executive)
+- job_category: string (e.g. Engineering, Sales, Product, Marketing, Finance, Data Science)
+- role_focus: what this role primarily focuses on (e.g. "backend development", "team management", "client relations")
+- team_structure: how this role fits in the team (e.g. "individual contributor", "team lead", "cross-functional collaborator")
+
+REQUIREMENTS:
+- education: detailed education requirements (e.g. "Bachelor's in Computer Science or related field")
+- certifications: list of required or preferred certifications
+- years_experience: range or string (e.g. "3-5 years")
+- domain_experience: specific industries or domains (e.g. "fintech", "healthcare", "e-commerce")
+
+IMPLICIT EXTRACTIONS:
+- methodologies: development methodologies (Agile, Scrum, Kanban, DevOps practices)
+- architectural_concepts: architectural patterns or concepts (microservices, event-driven, monolith)
+- performance_expectations: performance, scalability, reliability expectations
 
 Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
 """
@@ -608,6 +659,74 @@ Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or exp
     except Exception as e:
         logger.error(f"Error invoking LLM in extract_skills: {e}")
         return {"ai_extracted_metadata": {}}
+
+
+def analyze_requirements_node(state: JobWorkflowState) -> Dict[str, Any]:
+    logger.info("LangGraph Node: analyze_requirements")
+    if state.get("errors"):
+        return {}
+
+    input_data = state["input_data"]
+    extracted = state.get("ai_extracted_metadata") or {}
+    
+    try:
+        llm = get_llm(temperature=0.1)
+    except Exception as e:
+        logger.error(f"Failed to load LLM in analyze_requirements: {e}")
+        return {"errors": [f"LLM Provider Error: {e}"]}
+
+    prompt = f"""You are an expert recruitment analyst. Perform a deep semantic analysis of the job requirements to understand what this role truly needs.
+
+Job Title: {input_data.get('job_title')}
+Department: {input_data.get('department')}
+Description: {input_data.get('job_description')}
+Responsibilities: {input_data.get('responsibilities')}
+Required Skills: {', '.join(input_data.get('required_skills', []))}
+Education Requirements: {input_data.get('education_requirements')}
+Experience: {input_data.get('experience_min')} to {input_data.get('experience_max')} years
+Certifications: {', '.join(input_data.get('certifications', []))}
+
+DEEP REQUIREMENTS ANALYSIS:
+1. **Understand the "Why"**: Why are these requirements needed? What problems will the candidate solve?
+2. **Requirement Hierarchy**: Which requirements are foundational vs which are specialized?
+3. **Implicit Requirements**: What requirements are implied but not explicitly stated?
+4. **Requirement Flexibility**: Which requirements are negotiable vs non-negotiable?
+5. **Contextual Understanding**: How do requirements relate to the actual day-to-day work?
+
+Return a JSON object with the following keys:
+
+REQUIREMENT ANALYSIS:
+- core_requirements: the absolute must-have requirements that define this role
+- contextual_requirements: requirements that make sense in the specific context of this role
+- implicit_requirements: skills/qualities implied by the role but not explicitly listed
+- negotiable_requirements: requirements that could be flexible for the right candidate
+- deal_breakers: requirements that would immediately disqualify a candidate
+
+REQUIREMENT RELATIONSHIPS:
+- prerequisite_skills: skills that are prerequisites for other required skills
+- skill_combinations: specific combinations of skills that are valuable together
+- complementary_skills: skills that complement each other in this role
+
+REQUIREMENT DEPTH:
+- expertise_levels: for each key skill, indicate the depth needed (e.g., "advanced", "intermediate", "basic")
+- experience_context: what kind of experience is actually needed (e.g., "hands-on development", "architecture design", "team leadership")
+- domain_knowledge: specific domain knowledge required (e.g., "fintech regulations", "healthcare compliance")
+
+ROLE SPECIFICS:
+- daily_tasks: what the person will actually do day-to-day based on requirements
+- success_metrics: what success looks like in this role based on requirements
+- challenges: what challenges this person will face based on requirements
+
+Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations.
+"""
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        requirements_analysis = parse_json_response(text)
+        return {"ai_requirements_analysis": requirements_analysis}
+    except Exception as e:
+        logger.error(f"Error invoking LLM in analyze_requirements: {e}")
+        return {"ai_requirements_analysis": {}}
 
 
 def generate_searchable_keywords_node(state: JobWorkflowState) -> Dict[str, Any]:
@@ -654,40 +773,111 @@ def create_embedding_text_node(state: JobWorkflowState) -> Dict[str, Any]:
     ai_summary = state.get("ai_summary", "")
     extracted = state.get("ai_extracted_metadata") or {}
     keywords = state.get("ai_keywords") or {}
+    requirements_analysis = state.get("ai_requirements_analysis") or {}
 
     req_skills = ", ".join(input_data.get("required_skills") or [])
     certifications = ", ".join(input_data.get("certifications") or [])
 
+    # Enhanced extracted metadata
     ai_primary = ", ".join(extracted.get("primary_skills") or [])
     ai_secondary = ", ".join(extracted.get("secondary_skills") or [])
+    ai_mandatory = ", ".join(extracted.get("mandatory_skills") or [])
+    ai_nice = ", ".join(extracted.get("nice_to_have_skills") or [])
     ai_tools = ", ".join(extracted.get("tools") or [])
     ai_frameworks = ", ".join(extracted.get("frameworks") or [])
     ai_db = ", ".join(extracted.get("databases") or [])
     ai_cloud = ", ".join(extracted.get("cloud_technologies") or [])
     ai_soft = ", ".join(extracted.get("soft_skills") or [])
+    ai_leadership = ", ".join(extracted.get("leadership_skills") or [])
+    ai_problem_solving = ", ".join(extracted.get("problem_solving") or [])
     ai_domain = ", ".join(extracted.get("domain_experience") or [])
+    ai_methodologies = ", ".join(extracted.get("methodologies") or [])
+    ai_architectural = ", ".join(extracted.get("architectural_concepts") or [])
+    ai_performance = ", ".join(extracted.get("performance_expectations") or [])
 
+    # Role context
+    role_focus = extracted.get("role_focus", "")
+    team_structure = extracted.get("team_structure", "")
+
+    # Requirements analysis
+    core_reqs = ", ".join(requirements_analysis.get("core_requirements") or [])
+    implicit_reqs = ", ".join(requirements_analysis.get("implicit_requirements") or [])
+    deal_breakers = ", ".join(requirements_analysis.get("deal_breakers") or [])
+    prerequisite_skills = ", ".join(requirements_analysis.get("prerequisite_skills") or [])
+    skill_combinations = ", ".join(requirements_analysis.get("skill_combinations") or [])
+    daily_tasks = ", ".join(requirements_analysis.get("daily_tasks") or [])
+    success_metrics = ", ".join(requirements_analysis.get("success_metrics") or [])
+    challenges = ", ".join(requirements_analysis.get("challenges") or [])
+    expertise_levels = str(requirements_analysis.get("expertise_levels", {}))
+    experience_context = requirements_analysis.get("experience_context", "")
+    domain_knowledge = ", ".join(requirements_analysis.get("domain_knowledge") or [])
+
+    # Keywords
     kw_general = ", ".join(keywords.get("keywords") or [])
     kw_must = ", ".join(keywords.get("must_have_keywords") or [])
     kw_nice = ", ".join(keywords.get("nice_to_have_keywords") or [])
 
-    embedding_text = f"""Job Title: {input_data.get('job_title')}
+    embedding_text = f"""JOB OVERVIEW:
+Job Title: {input_data.get('job_title')}
 Department: {input_data.get('department')}
-Experience range: {input_data.get('experience_min')} to {input_data.get('experience_max')} years. Seniority Level: {extracted.get('seniority_level', '')}
+Experience Range: {input_data.get('experience_min')} to {input_data.get('experience_max')} years
+Seniority Level: {extracted.get('seniority_level', '')}
+Job Category: {extracted.get('job_category', '')}
+Role Focus: {role_focus}
+Team Structure: {team_structure}
+
+CORE JOB INFORMATION:
 Required Skills: {req_skills}
 Responsibilities: {input_data.get('responsibilities')}
 Job Description: {input_data.get('job_description')}
-Education Requirements: {input_data.get('education_requirements')}. AI Education: {extracted.get('education', '')}
+Education Requirements: {input_data.get('education_requirements')}
 Certifications: {certifications}
 
-AI Extracted Skills: Primary: {ai_primary} | Secondary: {ai_secondary}
-AI Extracted Tools & Tech: Tools: {ai_tools} | Frameworks: {ai_frameworks} | Databases: {ai_db} | Cloud: {ai_cloud}
-AI Soft Skills: {ai_soft}
-AI Domain Experience: {ai_domain}
-AI Job Category: {extracted.get('job_category', '')}
+DEEP SKILLS ANALYSIS:
+Primary Skills (Essential): {ai_primary}
+Secondary Skills (Important): {ai_secondary}
+Mandatory Skills (Non-negotiable): {ai_mandatory}
+Nice to Have Skills: {ai_nice}
 
-AI Keywords: General: {kw_general} | Must Have: {kw_must} | Nice to Have: {kw_nice}
-AI Summary: {ai_summary}"""
+TECHNOLOGY STACK:
+Tools: {ai_tools}
+Frameworks: {ai_frameworks}
+Databases: {ai_db}
+Cloud Technologies: {ai_cloud}
+Methodologies: {ai_methodologies}
+Architectural Concepts: {ai_architectural}
+Performance Expectations: {ai_performance}
+
+SOFT SKILLS & LEADERSHIP:
+Soft Skills: {ai_soft}
+Leadership Skills: {ai_leadership}
+Problem Solving Approaches: {ai_problem_solving}
+
+DOMAIN & CONTEXT:
+Domain Experience: {ai_domain}
+Domain Knowledge: {domain_knowledge}
+Experience Context: {experience_context}
+
+REQUIREMENTS ANALYSIS:
+Core Requirements: {core_reqs}
+Implicit Requirements: {implicit_reqs}
+Deal Breakers: {deal_breakers}
+Prerequisite Skills: {prerequisite_skills}
+Skill Combinations: {skill_combinations}
+Expertise Levels: {expertise_levels}
+
+ROLE SPECIFICS:
+Daily Tasks: {daily_tasks}
+Success Metrics: {success_metrics}
+Challenges: {challenges}
+
+SEARCH KEYWORDS:
+General Keywords: {kw_general}
+Must Have Keywords: {kw_must}
+Nice to Have Keywords: {kw_nice}
+
+AI SUMMARY:
+{ai_summary}"""
 
     return {"embedding_text": embedding_text.strip()}
 
@@ -847,6 +1037,7 @@ workflow.add_node("check_data_sufficiency", generate_clarifying_questions_node)
 workflow.add_node("store_job", store_job_node)
 workflow.add_node("generate_ai_summary", generate_ai_summary_node)
 workflow.add_node("extract_skills", extract_skills_node)
+workflow.add_node("analyze_requirements", analyze_requirements_node)
 workflow.add_node("generate_keywords", generate_searchable_keywords_node)
 workflow.add_node("create_embedding_text", create_embedding_text_node)
 workflow.add_node("generate_embedding", generate_embedding_node)
@@ -875,7 +1066,8 @@ workflow.add_conditional_edges(
     }
 )
 workflow.add_edge("generate_ai_summary", "extract_skills")
-workflow.add_edge("extract_skills", "generate_keywords")
+workflow.add_edge("extract_skills", "analyze_requirements")
+workflow.add_edge("analyze_requirements", "generate_keywords")
 workflow.add_edge("generate_keywords", "create_embedding_text")
 workflow.add_edge("create_embedding_text", "generate_embedding")
 workflow.add_edge("generate_embedding", "store_vector")

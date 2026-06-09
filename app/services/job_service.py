@@ -235,7 +235,7 @@ def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
         "must_have_keywords": job.ai_must_have_keywords,
         "nice_to_have_keywords": job.ai_nice_to_have_keywords,
     }
-
+    Keywords = { }
     state: JobWorkflowState = {
         "job_id": job_id,
         "company_id": job.company_id,
