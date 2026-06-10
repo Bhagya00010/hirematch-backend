@@ -27,7 +27,7 @@ STRUCTURED_OUTPUT_AVAILABLE = False
 # ---------------------------------------------------------------------------
 
 class JobSummaryOutput(BaseModel):
-    summary: str = Field(description="AI-generated summary of the job")
+    summary: str = Field(description="AI-generated summary of the job. MUST explicitly mention responsibilities, required skills, and min/max years of experience in the text itself.")
     responsibilities: List[str] = Field(description="Responsibilities extracted from JD")
     skills: List[str] = Field(description="Skills/technologies required")
     project_name: Optional[str] = Field(default=None)
@@ -260,8 +260,9 @@ def generate_ai_summary_node(state: JobWorkflowState) -> Dict[str, Any]:
             structured_llm = llm.with_structured_output(JobSummaryOutput)
             result: JobSummaryOutput = structured_llm.invoke(
                 f"Title: {job_title}\nJD: {job_description}\n"
-                f"Extract: summary ({summary_length}), responsibilities[], skills[], "
-                "project_name, project_sector, experience_min, experience_max."
+                f"Generate a highly detailed summary ({summary_length}). "
+                "CRITICAL: The 'summary' text itself MUST explicitly state the responsibilities (compulsory), required skills (compulsory), and the minimum/maximum years of experience (if mentioned). "
+                "Also extract these separately into the experience_min, experience_max, project_name, and project_sector fields."
             )
             if result:
                 return {"ai_summary_data": result.model_dump()}
@@ -272,8 +273,10 @@ def generate_ai_summary_node(state: JobWorkflowState) -> Dict[str, Any]:
     prompt = (
         f"Title: {job_title}\n"
         f"JD: {job_description[:1500]}\n\n"  # cap JD length
-        "Return ONLY valid JSON (no markdown):\n"
-        '{"summary":"...","responsibilities":[],"skills":[],'
+        "Return ONLY valid JSON (no markdown).\n"
+        "Generate a highly detailed 'summary'. CRITICAL: The 'summary' string MUST explicitly contain the 'responsibilities' (compulsory), 'skills' (compulsory), and min/max years of experience (if mentioned).\n"
+        "Also extract them into separate fields below:\n"
+        '{"summary":"...","responsibilities":["..."],"skills":["..."],'
         '"project_name":null,"project_sector":null,'
         '"experience_min":null,"experience_max":null}'
     )
