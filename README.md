@@ -346,61 +346,86 @@ CTRL + C
 
 ---
 
-## Background Jobs (Celery)
+## ## Background Jobs (Celery)
 
-This project uses Celery for asynchronous background processing. Celery will be used for long-running operations such as:
+This project uses **Celery** for asynchronous background processing. Celery will be used for long-running operations such as:
 
-Resume Processing
-Resume Parsing
-AI Candidate Matching
-Embedding Generation
-Notification Processing
-Celery Configuration
+- Resume Processing
+- Resume Parsing
+- AI Candidate Matching
+- Embedding Generation
+- Notification Processing
+
+### Celery Configuration
 
 Celery configuration is located in:
 
+```text
 app/celery_app.py
+```
 
 The application uses:
 
-Broker: Redis
-Result Backend: Redis (development)
+- **Broker:** Redis
+- **Result Backend:** Redis (Development)
 
-Environment variables:
+### Environment Variables
 
+```env
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/0
-Redis Setup
+```
+
+### Redis Setup
 
 Ensure Redis is running locally before starting the Celery worker.
 
 Default Redis URL:
 
+```text
 redis://localhost:6379/0
-Start Celery Worker
-Windows (Development)
+```
 
-Celery's default multiprocessing pool is not fully supported on Windows. Therefore, use the solo pool during development.
+### Start Celery Worker
 
-celery -A app.celery_app:celery_app worker --pool=solo --loglevel=info
+#### Windows (Development)
 
-Example output:
+Celery's default multiprocessing pool is not fully supported on Windows. Use the provided PowerShell script to start the worker.
 
-Connected to redis://localhost:6379/0
-mingle: all alone
-hirematch-worker@HOSTNAME ready.
-Linux / macOS
+```powershell
+.\app\scripts\start_worker.ps1
+```
 
-Use the default prefork pool.
+This script starts the Celery worker using the `solo` pool.
 
+---
+
+#### Linux / macOS
+
+Start the Celery worker directly:
+
+```bash
 celery -A app.celery_app:celery_app worker --loglevel=info
-Docker / Production
+```
 
-Use multiple worker processes for better throughput.
+If you have a shell script (for example, `app/scripts/start_worker.sh`), you can run:
 
+```bash
+chmod +x app/scripts/start_worker.sh
+./app/scripts/start_worker.sh
+```
+
+---
+
+#### Docker / Production
+
+Use multiple worker processes for improved throughput:
+
+```bash
 celery -A app.celery_app:celery_app worker \
- --concurrency=4 \
- --loglevel=info
+    --concurrency=4 \
+    --loglevel=info
+```
 
 # Development Guidelines
 
