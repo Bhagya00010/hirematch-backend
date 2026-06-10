@@ -13,7 +13,10 @@ def _password_bytes(password: str) -> bytes:
     return hashlib.sha256(password.encode("utf-8")).digest()
 
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
+def verify_password(plain_password: str, password_hash: str | None) -> bool:
+    if password_hash is None:
+        return False
+
     return bcrypt.checkpw(_password_bytes(plain_password), password_hash.encode("utf-8"))
 
 

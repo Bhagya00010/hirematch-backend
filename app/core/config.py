@@ -30,6 +30,15 @@ class Settings(BaseSettings):
 
     SMTP_PORT: int = 587
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+
+    GOOGLE_CLIENT_SECRET: str | None = None
+
+    GOOGLE_REDIRECT_URI: str | None = None
+
+    FRONTEND_URL: str = "http://localhost:3000"
+
     SMTP_USERNAME: str | None = None
 
     SMTP_PASSWORD: str | None = None
