@@ -56,10 +56,10 @@ Before starting, make sure the following software is installed:
 - PostgreSQL
 - Git
 
-Optional:
+Additional Requirements:
 
-- Redis (for future background jobs)
-- Docker Desktop
+- Redis (required for Celery development setup)
+- Docker Desktop (optional)
 
 ---
 
@@ -346,6 +346,87 @@ CTRL + C
 
 ---
 
+## ## Background Jobs (Celery)
+
+This project uses **Celery** for asynchronous background processing. Celery will be used for long-running operations such as:
+
+- Resume Processing
+- Resume Parsing
+- AI Candidate Matching
+- Embedding Generation
+- Notification Processing
+
+### Celery Configuration
+
+Celery configuration is located in:
+
+```text
+app/celery_app.py
+```
+
+The application uses:
+
+- **Broker:** Redis
+- **Result Backend:** Redis (Development)
+
+### Environment Variables
+
+```env
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+```
+
+### Redis Setup
+
+Ensure Redis is running locally before starting the Celery worker.
+
+Default Redis URL:
+
+```text
+redis://localhost:6379/0
+```
+
+### Start Celery Worker
+
+#### Windows (Development)
+
+Celery's default multiprocessing pool is not fully supported on Windows. Use the provided PowerShell script to start the worker.
+
+```powershell
+.\app\scripts\start_worker.ps1
+```
+
+This script starts the Celery worker using the `solo` pool.
+
+---
+
+#### Linux / macOS
+
+Start the Celery worker directly:
+
+```bash
+celery -A app.celery_app:celery_app worker --loglevel=info
+```
+
+If you have a shell script (for example, `app/scripts/start_worker.sh`), you can run:
+
+```bash
+chmod +x app/scripts/start_worker.sh
+./app/scripts/start_worker.sh
+```
+
+---
+
+#### Docker / Production
+
+Use multiple worker processes for improved throughput:
+
+```bash
+celery -A app.celery_app:celery_app worker \
+    --concurrency=4 \
+    --loglevel=info
+```
+
 # Development Guidelines
 
 - Never commit `.env`
@@ -366,8 +447,9 @@ CTRL + C
 - LangChain Integration
 - LangGraph Workflows
 - ChromaDB Integration
-- Background Workers
-- Docker Deployment
+- Celery Background Workers
+- Resume Processing Pipelines
+- Scheduled Background Tasks- Docker Deployment
 - Kubernetes Deployment
 
 ---
