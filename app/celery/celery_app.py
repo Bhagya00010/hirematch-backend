@@ -12,7 +12,7 @@ celery_app = Celery(
 
 # autodiscover is more reliable than include= on Windows
 celery_app.autodiscover_tasks([
-    "app.tasks",
+    "app.tasks", 'app.celery'
 ])
 
 celery_app.conf.update(
