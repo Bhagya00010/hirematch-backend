@@ -32,8 +32,8 @@ rank-bm25
 
 openai
 
-celery
-redis
+celery[sqlalchemy]>=5.3
+amqp
 
 boto3
 

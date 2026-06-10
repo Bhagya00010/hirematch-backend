@@ -9,7 +9,7 @@ class JobBase(BaseModel):
     job_code: str = Field(default="", max_length=100, description="Unique internal job code")
     department: str = Field(default="", max_length=150, description="Department name")
     
-    experience_min: int = Field(default=0, ge=0, description="Minimum experience required in years")
+    experience_min: int | None = Field(None, ge=0, description="Minimum experience required in years")
     experience_max: int | None = Field(None, ge=0, description="Maximum experience required in years")
     vacancies: int = Field(1, ge=1, description="Number of vacancies")
     

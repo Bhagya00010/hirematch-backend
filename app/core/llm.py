@@ -52,6 +52,7 @@ class OllamaProvider(BaseAIProvider):
             model=self.model_name,
             base_url=self.base_url,
             temperature=temperature,
+            format="json",
             client_kwargs={"headers": headers} if headers else {}
         )
 
