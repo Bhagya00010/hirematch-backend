@@ -16,14 +16,15 @@ python-docx
 pdfplumber
 pdf2image
 pytesseract
-
+authlib
 langchain
 langgraph
 langchain-openai
 langchain-google-genai
 langchain-ollama
 langchain-community
-
+itsdangerous 
+httpx
 chromadb
 
 sentence-transformers
