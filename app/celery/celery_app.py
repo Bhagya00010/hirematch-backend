@@ -7,6 +7,9 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
 )
 
+# Auto-discover tasks from app.celery module
+celery_app.autodiscover_tasks(['app.celery'])
+
 celery_app.conf.update(
     # Serialization
     task_serializer="json",

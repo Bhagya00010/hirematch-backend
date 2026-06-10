@@ -10,6 +10,7 @@ from app.schemas.job import JobCreate, JobUpdate
 from app.services.workflow import (
     job_workflow, JobWorkflowState, validate_answer_relevance
 )
+from app.celery.tasks import create_job_embedding_task
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,15 @@ def run_job_creation_workflow(
         return result
 
     job = get_job(db, result["_final"].get("job_id"))
+    
+    # Trigger embedding creation asynchronously via Celery
+    try:
+        create_job_embedding_task.delay(str(job.job_id))
+        logger.info(f"Embedding task queued for job: {job.job_id}")
+    except Exception as e:
+        logger.error(f"Failed to queue embedding task: {e}")
+        # Don't fail the job creation if Celery task fails
+    
     return {"success": True, "job": job}
 
 
@@ -158,22 +168,31 @@ def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
         return result
 
     db.refresh(job)
+    
+    # Trigger embedding creation asynchronously via Celery
+    try:
+        create_job_embedding_task.delay(str(job.job_id))
+        logger.info(f"Embedding task queued for job: {job.job_id}")
+    except Exception as e:
+        logger.error(f"Failed to queue embedding task: {e}")
+    
     return {"success": True, "job": job}
 
 
 def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
-    """On-demand embedding generation for an existing job."""
+    """On-demand embedding generation for an existing job (triggers Celery task)."""
     job = get_job(db, job_id)
     if not job:
         return {"success": False, "errors": ["Job not found"]}
 
-    result = _invoke_workflow(_base_state(job, db))
-    if not result["success"]:
-        return result
-
-    db.refresh(job)
-    embedding = db.query(JobEmbedding).filter(JobEmbedding.job_id == job_id).first()
-    return {"success": True, "embedding": embedding}
+    # Trigger embedding creation asynchronously via Celery
+    try:
+        create_job_embedding_task.delay(str(job.job_id))
+        logger.info(f"Embedding task queued for job: {job.job_id}")
+        return {"success": True, "message": "Embedding task queued"}
+    except Exception as e:
+        logger.error(f"Failed to queue embedding task: {e}")
+        return {"success": False, "errors": [str(e)]}
 
 
 def submit_job_answers(
@@ -253,5 +272,12 @@ def submit_job_answers(
         db.refresh(job)
     except Exception as e:
         logger.exception("Failed to re-process job after answer submission (non-fatal)")
+
+    # Trigger embedding creation asynchronously via Celery
+    try:
+        create_job_embedding_task.delay(str(job.job_id))
+        logger.info(f"Embedding task queued for job: {job.job_id}")
+    except Exception as e:
+        logger.error(f"Failed to queue embedding task: {e}")
 
     return {"success": True, "job": job}
