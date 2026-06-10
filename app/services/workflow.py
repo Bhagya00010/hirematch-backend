@@ -440,7 +440,6 @@ def build_simplified_workflow() -> StateGraph:
     workflow.add_node("validate_input", validate_job_input_node)
     workflow.add_node("generate_summary", generate_ai_summary_node)
     workflow.add_node("store_job", store_simplified_job_node)
-    workflow.add_node("create_embedding", create_embedding_node)
     workflow.add_node("store_draft_job", store_simplified_job_node)
 
     workflow.add_edge(START, "validate_input")
@@ -455,8 +454,7 @@ def build_simplified_workflow() -> StateGraph:
     )
     workflow.add_edge("store_draft_job", END)
     workflow.add_edge("generate_summary", "store_job")
-    workflow.add_edge("store_job", "create_embedding")
-    workflow.add_edge("create_embedding", END)
+    workflow.add_edge("store_job", END)
 
     return workflow
 
