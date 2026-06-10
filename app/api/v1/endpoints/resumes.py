@@ -26,14 +26,12 @@ async def upload_resumes(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-    """Upload one or multiple resumes and store them in local storage for a job."""
+    """Upload resumes — processing starts automatically in background."""
     if not files:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Please upload at least one resume file")
-
-    if not resume_service.get_job_or_none(db, job_id):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+            status_code=400, detail="Please upload at least one resume file")
+    if not resume_service.get_job_or_none(db, job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
 
     resumes = await resume_service.save_resume_files(db, job_id, files)
     return ResumeUploadResponse(total_uploaded=len(resumes), resumes=resumes)
@@ -70,6 +68,7 @@ async def stream_resume_processing(
                 "completed": summary["completed"],
                 "failed": summary["failed"],
                 "pending": summary["pending"],
+                "processing": summary["processing"],
                 "logs": [
                     {
                         "resume_file_id": str(item["resume_file"].id),
@@ -82,7 +81,7 @@ async def stream_resume_processing(
                 ],
             }
             yield f"data: {json.dumps(payload)}\n\n"
-            if summary["pending"] == 0:
+            if summary["pending"] == 0 and summary["processing"] == 0:
                 break
             await asyncio.sleep(interval_seconds)
 
@@ -101,18 +100,6 @@ def delete_resume(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Resume file not found")
     return ResumeDeleteResponse()
-
-
-@router.post("/{job_id}/resumes/process", response_model=ResumeProcessResponse)
-def process_resumes(
-    job_id: UUID,
-    db: Session = Depends(get_db),
-):
-    """Extract, validate, parse, and embed all uploaded resumes for the job."""
-    if not resume_service.get_job_or_none(db, job_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    return resume_service.process_resumes(db, job_id)
 
 
 @router.get("/{job_id}/resumes/processing-log", response_model=ResumeProcessResponse)

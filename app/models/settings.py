@@ -56,7 +56,7 @@ class Settings(Base):
 
     allowed_file_types: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
-        default=["doc", "docx"],
+        default=["pdf", "docx", "txt"],
     )
 
     updated_at: Mapped[datetime] = mapped_column(
