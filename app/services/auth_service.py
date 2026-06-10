@@ -44,7 +44,43 @@ def create_user(
         full_name=full_name.strip(),
         password_hash=get_password_hash(password),
         role=role,
+        auth_provider="local",
     )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+def get_user_by_google_id(
+    db: Session,
+    google_id: str,
+) -> User | None:
+    stmt = select(User).where(
+        User.google_id == google_id
+    )
+    return db.scalar(stmt)
+
+def create_google_user(
+    db: Session,
+    *,
+    email: str,
+    full_name: str,
+    google_id: str,
+    avatar_url: str | None = None,
+) -> User:
+
+    user = User(
+        email=email.lower(),
+        full_name=full_name.strip(),
+        google_id=google_id,
+        avatar_url=avatar_url,
+        auth_provider="google",
+        role=UserRole.HR_ADMIN,
+        is_active=True,
+    )
+
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -52,10 +88,25 @@ def create_user(
 
 
 def authenticate_user(db: Session, *, email: str, password: str) -> User | None:
+
     user = get_user_by_email(db, email)
-    if user is None or not user.is_active:
+
+    if user is None:
         return None
-    if not verify_password(password, user.password_hash):
+
+    if not user.is_active:
+        return None
+
+    # Prevent Google accounts from password login
+    if user.auth_provider == "google":
+        return None
+
+    if (user.password_hash is None
+        or not verify_password(
+            password,
+            user.password_hash,
+        )
+    ):
         return None
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
