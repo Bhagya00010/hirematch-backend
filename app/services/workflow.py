@@ -1,6 +1,7 @@
 import json
 import hashlib
 import logging
+import re
 from typing import TypedDict, List, Dict, Any, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
@@ -18,9 +19,85 @@ from app.core.job_settings import (
 )
 
 # Check if LLM supports structured output
-STRUCTURED_OUTPUT_AVAILABLE = True
+STRUCTURED_OUTPUT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def validate_answer_relevance(field_name: str, answer: str) -> tuple[bool, str]:
+    """
+    Validate if the user's answer is relevant to the field being asked.
+    Uses LLM to check if the answer is appropriate for the field.
+    
+    Returns:
+        (is_valid, error_message)
+    """
+    try:
+        llm = get_llm(temperature=0)
+    except Exception as e:
+        logger.error(f"Failed to load LLM for answer validation: {e}")
+        # If LLM fails, assume valid to not block the user
+        return True, ""
+    
+    # Optimized prompts - shorter and more direct
+    if field_name == "responsibilities":
+        prompt = f'Is this about job duties/tasks? Answer: "{answer}"\nRespond VALID or INVALID with reason.'
+    elif field_name == "required_skills":
+        prompt = f'Is this listing technical skills/tools? Answer: "{answer}"\nRespond VALID or INVALID with reason.'
+    else:
+        prompt = f'Is this about {field_name}? Answer: "{answer}"\nRespond VALID or INVALID with reason.'
+    
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        text = text.strip().upper()
+        
+        if text.startswith("VALID"):
+            return True, ""
+        elif text.startswith("INVALID"):
+            # Extract the error message
+            error_msg = text.replace("INVALID", "").strip()
+            return False, error_msg or f"Invalid {field_name}. Please provide relevant information."
+        else:
+            # If unclear, assume valid to not block the user
+            logger.warning(f"Unclear validation response: {text}")
+            return True, ""
+    except Exception as e:
+        logger.error(f"Error validating answer: {e}")
+        # If validation fails, assume valid to not block the user
+        return True, ""
+
+
+def check_field_present_with_llm(field_name: str, job_description: str, job_title: str) -> bool:
+    """
+    Use LLM to check if a field is present in the job description.
+    This is more accurate than keyword matching.
+    """
+    try:
+        llm = get_llm(temperature=0)
+    except Exception as e:
+        logger.error(f"Failed to load LLM for field validation: {e}")
+        # If LLM fails, assume field is present to not block the user
+        return True
+    
+    # Optimized prompt - shorter and more direct
+    if field_name == "responsibilities":
+        prompt = f'JD: "{job_description[:500]}..."\nDoes it mention job duties/tasks? Respond YES or NO.'
+    elif field_name == "required_skills":
+        prompt = f'JD: "{job_description[:500]}..."\nDoes it mention technical skills? Respond YES or NO.'
+    else:
+        prompt = f'JD: "{job_description[:500]}..."\nDoes it mention {field_name}? Respond YES or NO.'
+    
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        text = text.strip().upper()
+        
+        return text.startswith("YES")
+    except Exception as e:
+        logger.error(f"Error checking field with LLM: {e}")
+        # If validation fails, assume field is present to not block the user
+        return True
 
 
 # Output Model for AI Summary with Output Parser
@@ -93,6 +170,7 @@ def validate_job_input_node(state: JobWorkflowState) -> Dict[str, Any]:
     
     input_data = state["input_data"]
     job_description = input_data.get('job_description', '')
+    job_title = input_data.get('job_title') or 'Position'
     
     if not job_description:
         return {"errors": ["Job description is required"], "validation_result": {"valid": False}}
@@ -107,19 +185,17 @@ def validate_job_input_node(state: JobWorkflowState) -> Dict[str, Any]:
     critical_fields = get_critical_fields()
     optional_fields = get_optional_fields()
     
-    # Check critical fields
+    # Check critical fields using LLM
     for field_name in critical_fields:
-        keywords = get_validation_keywords(field_name)
-        has_field = any(keyword.lower() in job_description.lower() for keyword in keywords)
+        has_field = check_field_present_with_llm(field_name, job_description, job_title)
         
         if not has_field:
             validation_result["missing_critical_fields"].append(field_name)
             validation_result["valid"] = False
     
-    # Check optional fields
+    # Check optional fields using LLM
     for field_name in optional_fields:
-        keywords = get_validation_keywords(field_name)
-        has_field = any(keyword.lower() in job_description.lower() for keyword in keywords)
+        has_field = check_field_present_with_llm(field_name, job_description, job_title)
         
         if not has_field:
             validation_result["missing_optional_fields"].append(field_name)
@@ -128,25 +204,39 @@ def validate_job_input_node(state: JobWorkflowState) -> Dict[str, Any]:
     ask_questions = False
     questions = []
     
+    # Ask specific questions for missing critical fields
     if validation_result["missing_critical_fields"]:
         if VALIDATION_SETTINGS.get("ask_questions_on_critical_missing", True):
             ask_questions = True
-            missing_list = ", ".join(validation_result["missing_critical_fields"])
-            questions.append({
-                "id": "q1",
-                "question": f"The job description seems to be missing critical information: {missing_list}. Please provide these details.",
-                "field_name": "job_description"
-            })
+            for field_name in validation_result["missing_critical_fields"]:
+                if field_name == "responsibilities":
+                    questions.append({
+                        "id": f"q_{field_name}",
+                        "question": "The job description doesn't clearly mention the responsibilities. Please describe the key responsibilities and day-to-day tasks for this role.",
+                        "field_name": "responsibilities"
+                    })
+                elif field_name == "required_skills":
+                    questions.append({
+                        "id": f"q_{field_name}",
+                        "question": "The job description doesn't clearly mention the required skills. Please list the technical skills and technologies required for this role (e.g., Python, React, AWS, etc.).",
+                        "field_name": "required_skills"
+                    })
+                else:
+                    questions.append({
+                        "id": f"q_{field_name}",
+                        "question": f"Please provide details about: {field_name}",
+                        "field_name": field_name
+                    })
     
     if validation_result["missing_optional_fields"]:
         if VALIDATION_SETTINGS.get("ask_questions_on_optional_missing", False):
             ask_questions = True
-            missing_list = ", ".join(validation_result["missing_optional_fields"])
-            questions.append({
-                "id": "q2",
-                "question": f"The job description is missing optional information: {missing_list}. Would you like to provide these details?",
-                "field_name": "job_description"
-            })
+            for field_name in validation_result["missing_optional_fields"]:
+                questions.append({
+                    "id": f"q_{field_name}",
+                    "question": f"Would you like to provide details about: {field_name}?",
+                    "field_name": field_name
+                })
     
     if ask_questions:
         # Limit number of questions
@@ -154,6 +244,7 @@ def validate_job_input_node(state: JobWorkflowState) -> Dict[str, Any]:
         questions = questions[:max_questions]
         
         return {
+            "job_id": state.get("job_id") or uuid4(),
             "validation_result": validation_result,
             "needs_clarification": True,
             "questions": questions
@@ -179,7 +270,7 @@ def generate_ai_summary_node(state: JobWorkflowState) -> Dict[str, Any]:
     
     input_data = state["input_data"]
     job_description = input_data.get('job_description', '')
-    job_title = input_data.get('job_title', '')
+    job_title = input_data.get('job_title') or 'Position'
     
     # Get temperature from settings
     temperature = AI_SETTINGS.get("extraction_temperature", 0.3)
@@ -235,33 +326,27 @@ Extract:
     
     # Fallback: Simple JSON approach
     logger.info("Using fallback JSON approach")
-    prompt = f"""You are an expert recruitment AI. Analyze the following job description and extract key information.
+    schema = JobSummaryOutput.model_json_schema()
+    prompt = f"""You are a data extraction engine.
 
-Job Title: {job_title}
-Job Description: {job_description}
+Return ONLY valid JSON.
 
-Extract the following information:
-1. A comprehensive AI summary ({summary_length}) describing the role
-2. List of responsibilities mentioned in the job description
-3. List of skills/technologies required
-4. Project name (if mentioned)
-5. Project sector/industry (if mentioned)
-6. Minimum years of experience (if specified)
-7. Maximum years of experience (if specified)
+Schema:
+{json.dumps(schema, indent=2)}
 
-Return a JSON object with this exact structure:
-{{
-  "summary": "{summary_length} summary of the role",
-  "responsibilities": ["responsibility 1", "responsibility 2"],
-  "skills": ["skill 1", "skill 2"],
-  "project_name": "project name or null",
-  "project_sector": "sector or null",
-  "experience_min": number or null,
-  "experience_max": number or null
-}}
+Job Title:
+{job_title}
 
-Be thorough and extract ALL information present in the description.
-Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or explanations."""
+Job Description:
+{job_description}
+
+Rules:
+- No markdown
+- No explanations
+- No headings
+- No bullet points
+- Output must start with {{
+- Output must end with }}"""
     
     try:
         response = llm.invoke(prompt)
@@ -277,7 +362,7 @@ Output ONLY valid JSON. Do not write any introduction, markdown wrapping, or exp
             text = text[:-3]
         text = text.strip()
         
-        ai_summary_data = json.loads(text)
+        ai_summary_data = parse_json_response(text)
         logger.info(f"AI summary generated with fallback: {ai_summary_data.get('summary', '')[:100]}...")
         return {"ai_summary_data": ai_summary_data}
         
@@ -310,7 +395,7 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
     
     db = state["db"]
     input_data = state["input_data"]
-    ai_summary_data = state.get("ai_summary_data", {})
+    ai_summary_data = state.get("ai_summary_data") or {}
     
     job_id = state.get("job_id") or uuid4()
     
@@ -324,6 +409,11 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
             if input_data.get('job_title'):
                 existing_job.job_title = input_data.get('job_title')
             existing_job.ai_summary = ai_summary_data.get('summary')
+            # Update experience fields only if AI provided values
+            if ai_summary_data.get('experience_min') is not None:
+                existing_job.experience_min = ai_summary_data.get('experience_min')
+            if ai_summary_data.get('experience_max') is not None:
+                existing_job.experience_max = ai_summary_data.get('experience_max')
             existing_job.updated_at = datetime.utcnow()
             
             logger.info(f"Updated existing job: {job_id}")
@@ -341,8 +431,8 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
                 required_skills=ai_summary_data.get('skills', []),
                 education_requirements='',  # Empty for now
                 certifications=[],
-                experience_min=ai_summary_data.get('experience_min'),
-                experience_max=ai_summary_data.get('experience_max'),
+                experience_min=ai_summary_data.get('experience_min') or 0,  # Default to 0 if None
+                experience_max=ai_summary_data.get('experience_max'),  # Can be None
                 ai_summary=ai_summary_data.get('summary'),
                 ai_embedding_status=False
             )
@@ -457,6 +547,7 @@ def build_simplified_workflow() -> StateGraph:
     workflow.add_node("generate_summary", generate_ai_summary_node)
     workflow.add_node("store_job", store_simplified_job_node)
     workflow.add_node("create_embedding", create_embedding_node)
+    workflow.add_node("store_draft_job", store_simplified_job_node)
     
     # Define edges
     workflow.add_edge(START, "validate_input")
@@ -466,12 +557,13 @@ def build_simplified_workflow() -> StateGraph:
         "validate_input",
         should_proceed,
         {
-            "ask_questions": END,
+            "ask_questions": "store_draft_job",
             "proceed": "generate_summary",
             "stop": END
         }
     )
     
+    workflow.add_edge("store_draft_job", END)
     workflow.add_edge("generate_summary", "store_job")
     workflow.add_edge("store_job", "create_embedding")
     workflow.add_edge("create_embedding", END)

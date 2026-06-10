@@ -9,7 +9,7 @@ from sqlalchemy import or_
 from app.models.job import Job, JobEmbedding, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
 from app.services.workflow import (
-    job_workflow, JobWorkflowState
+    job_workflow, JobWorkflowState, validate_answer_relevance
 )
 
 logger = logging.getLogger(__name__)
@@ -105,6 +105,8 @@ def run_job_creation_workflow(db: Session, job_in: JobCreate, creator_id: UUID) 
     
     try:
         final_state = job_workflow.invoke(initial_state)
+        
+        logger.info(f"FINAL STATE: {final_state}")
         
         if final_state.get("errors"):
             logger.error(f"LangGraph job workflow failed: {final_state['errors']}")
@@ -230,6 +232,23 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
         
         if not field_name or not answer:
             continue
+        
+        # Validate answer relevance for critical fields
+        if field_name in ["responsibilities", "required_skills"]:
+            is_valid, error_msg = validate_answer_relevance(field_name, answer)
+            if not is_valid:
+                logger.warning(f"Invalid answer for {field_name}: {error_msg}")
+                # Return the question again instead of error
+                return {
+                    "success": True,
+                    "needs_clarification": True,
+                    "questions": [{
+                        "id": f"q_{field_name}",
+                        "question": f"Your previous answer for {field_name} was not valid: {error_msg}. Please provide proper {field_name}.",
+                        "field_name": field_name
+                    }],
+                    "job_id": job_id
+                }
         
         # Update job description if that's the field being updated
         if field_name == "job_description":

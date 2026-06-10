@@ -112,7 +112,7 @@ AI_SETTINGS = {
     "generate_ai_summary": True,
     "summary_length": "paragraph",  # Options: "1 sentence", "2-3 sentences", "paragraph"
     "extract_from_description": True,
-    "extraction_temperature": 0.3,
+    "extraction_temperature": 0,
     "use_fallback_on_failure": True,
     "fallback_to_simple_extraction": True,
     "use_structured_output": True,
