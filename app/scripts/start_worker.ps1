@@ -7,8 +7,8 @@ Write-Host "Queue      : $QUEUE"
 Write-Host "Concurrency: $CONCURRENCY"
 Write-Host "Log level  : $LOG_LEVEL"
 
-celery -A app.celery.celery_app:celery_app worker `
+python -m celery -A app.celery.celery_app:celery_app worker `
+    --pool=solo `
     --queues=$QUEUE `
-    --concurrency=$CONCURRENCY `
     --loglevel=$LOG_LEVEL `
     --hostname="hirematch-worker@%h"

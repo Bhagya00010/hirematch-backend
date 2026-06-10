@@ -60,9 +60,10 @@ async def save_resume_files(db: Session, job_id: UUID, files: list[UploadFile]) 
     upload_dir = Path(settings.RESUME_UPLOAD_DIR) / str(job_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    saved: list[ResumeFile] = []
+    saved: list[tuple[ResumeFile, bool]] = []
     for upload in files:
         original_filename = Path(upload.filename or "resume").name
+        extension = Path(original_filename).suffix.lower()
         content = await upload.read()
         file_hash = hashlib.md5(content).hexdigest()
         storage_name = f"{uuid4()}_{original_filename}"
@@ -77,8 +78,7 @@ async def save_resume_files(db: Session, job_id: UUID, files: list[UploadFile]) 
                 ResumeFile.job_posting_id == job_id,
                 ResumeFile.file_hash_md5 == file_hash,
             )
-            .first()
-            is not None
+            .first() is not None
         )
 
         resume_file = ResumeFile(
@@ -87,15 +87,46 @@ async def save_resume_files(db: Session, job_id: UUID, files: list[UploadFile]) 
             storage_path=str(storage_path),
             file_size_bytes=len(content),
             file_hash_md5=file_hash,
-            rejection_reason="Duplicate resume hash for this job" if is_duplicate else None,
         )
+        if is_duplicate:
+            resume_file.validation_status = ResumeValidationStatus.INVALID
+            resume_file.processing_status = ResumeProcessingStatus.FAILED
+            resume_file.rejection_reason = "Duplicate resume hash for this job"
+        elif extension not in ALLOWED_RESUME_EXTENSIONS:
+            resume_file.validation_status = ResumeValidationStatus.INVALID
+            resume_file.processing_status = ResumeProcessingStatus.FAILED
+            resume_file.rejection_reason = (
+                f"Unsupported resume file type: {extension}. "
+                "Please upload PDF, DOCX, or TXT."
+            )
         db.add(resume_file)
-        saved.append(resume_file)
+        saved.append(
+            (resume_file, is_duplicate or extension not in ALLOWED_RESUME_EXTENSIONS)
+        )
 
     db.commit()
-    for resume_file in saved:
+
+    result: list[ResumeFile] = []
+    for resume_file, skip_processing in saved:
         db.refresh(resume_file)
-    return saved
+        if not skip_processing:
+            from app.tasks.resume_tasks import process_single_resume_task
+            try:
+                process_single_resume_task.apply_async(
+                    args=[str(resume_file.id)],
+                    queue="resume_processing",
+                )
+            except Exception as exc:
+                logger.exception("Failed to enqueue resume processing task")
+                mark_resume_failed(
+                    db,
+                    resume_file,
+                    f"Failed to enqueue resume processing task: {exc}",
+                    remove_local=False,
+                )
+        result.append(resume_file)
+
+    return result
 
 
 def delete_resume_file(db: Session, job_id: UUID, resume_file_id: UUID) -> bool:
@@ -114,30 +145,6 @@ def delete_resume_file(db: Session, job_id: UUID, resume_file_id: UUID) -> bool:
     db.delete(resume_file)
     db.commit()
     return True
-
-
-def process_resumes(db: Session, job_id: UUID) -> dict[str, Any]:
-    resume_files = (
-        db.query(ResumeFile)
-        .filter(
-            ResumeFile.job_posting_id == job_id,
-            ResumeFile.processing_status.in_(
-                [ResumeProcessingStatus.PENDING, ResumeProcessingStatus.FAILED]
-            ),
-        )
-        .order_by(ResumeFile.created_at.asc())
-        .all()
-    )
-
-    for resume_file in resume_files:
-        if (
-            resume_file.processing_status == ResumeProcessingStatus.FAILED
-            and not Path(resume_file.storage_path).exists()
-        ):
-            continue
-        process_single_resume(db, resume_file)
-
-    return get_processing_summary(db, job_id)
 
 
 def process_single_resume(db: Session, resume_file: ResumeFile) -> None:
@@ -227,6 +234,7 @@ def process_single_resume(db: Session, resume_file: ResumeFile) -> None:
     except Exception as exc:
         logger.exception("Resume processing failed")
         mark_resume_failed(db, resume_file, str(exc), remove_local=False)
+        raise
 
 
 def mark_resume_failed(db: Session, resume_file: ResumeFile, reason: str, remove_local: bool) -> None:
@@ -370,6 +378,7 @@ def resolve_embedding_model_name() -> str:
 
 
 def get_processing_summary(db: Session, job_id: UUID) -> dict[str, Any]:
+    db.expire_all()
     rows = (
         db.query(ResumeFile)
         .options(joinedload(ResumeFile.candidate))
@@ -383,11 +392,14 @@ def get_processing_summary(db: Session, job_id: UUID) -> dict[str, Any]:
                  ResumeProcessingStatus.FAILED)
     pending = sum(1 for row in rows if row.processing_status ==
                   ResumeProcessingStatus.PENDING)
+    processing = sum(1 for row in rows if row.processing_status ==
+                     ResumeProcessingStatus.PROCESSING)
     return {
         "total": len(rows),
         "completed": completed,
         "failed": failed,
         "pending": pending,
+        "processing": processing,
         "logs": [{"resume_file": row, "candidate": row.candidate} for row in rows],
     }
 
@@ -408,11 +420,19 @@ def run_matching(db: Session, job_id: UUID) -> list[MatchResult]:
         return []
 
     candidates = get_candidates_for_job(db, job_id)
+    job_secondary_skills = (
+        (job.certifications or [])
+        + (job.ai_nice_to_have_keywords or [])
+        + (job.ai_tools or [])
+        + (job.ai_technologies or [])
+        + (job.ai_soft_skills or [])
+    )
     job_keywords = normalize_keywords(
         (job.required_skills or [])
-        + (job.preferred_skills or [])
+        + (job.ai_required_skills or [])
         + (job.ai_keywords or [])
         + (job.ai_must_have_keywords or [])
+        + job_secondary_skills
         + [job.job_title, job.department, job.education_requirements]
     )
 
@@ -451,7 +471,7 @@ def run_matching(db: Session, job_id: UUID) -> list[MatchResult]:
         result.score_education = 100 if job.education_requirements and candidate.education_degree and candidate.education_degree.lower(
         ) in job.education_requirements.lower() else 0
         result.score_other_skills = keyword_overlap_score(
-            job.preferred_skills or [], candidate.skills or [])
+            job_secondary_skills, (candidate.skills or []) + (candidate.tech_stack or []))
         result.matched_keywords = matched
         result.unmatched_keywords = unmatched
         result.bm25_score = float(round(keyword_score, 4))
@@ -521,11 +541,14 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 
 def score_experience(job: Job, candidate: Candidate) -> float:
     years = float(candidate.total_experience_years or 0)
-    if years >= job.experience_min and years <= job.experience_max:
+    experience_min = float(job.experience_min or 0)
+    experience_max = float(job.experience_max) if job.experience_max is not None else None
+
+    if years >= experience_min and (experience_max is None or years <= experience_max):
         return 100.0
-    if years > job.experience_max:
+    if experience_max is not None and years > experience_max:
         return 85.0
-    return round((years / max(job.experience_min, 1)) * 100, 2)
+    return round((years / max(experience_min, 1)) * 100, 2)
 
 
 def parse_optional_float(value: Any) -> float | None:

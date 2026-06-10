@@ -58,6 +58,7 @@ class ResumeProcessResponse(BaseModel):
     completed: int
     failed: int
     pending: int
+    processing: int = 0
     logs: list[ProcessingLogItem]
 
 
