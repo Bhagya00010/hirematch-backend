@@ -9,10 +9,7 @@ from sqlalchemy import or_
 from app.models.job import Job, JobEmbedding, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
 from app.services.workflow import (
-    job_workflow, JobWorkflowState,
-    generate_ai_summary_node, extract_skills_node, generate_searchable_keywords_node,
-    create_embedding_text_node, generate_embedding_node, store_vector_node,
-    update_ai_metadata_node
+    job_workflow, JobWorkflowState
 )
 
 logger = logging.getLogger(__name__)
@@ -84,9 +81,8 @@ def update_job(db: Session, job: Job, job_in: JobUpdate) -> Job:
 
 def run_job_creation_workflow(db: Session, job_in: JobCreate, creator_id: UUID) -> Dict[str, Any]:
     """
-    Execute the full LangGraph pipeline to validate input, store the job,
-    generate AI summary, extract skills, generate keywords, and create/store
-    embeddings in the database.
+    Execute the simplified LangGraph pipeline to validate input, store the job,
+    generate AI summary, and create/store embeddings in the database.
     
     Returns either:
     - {"success": True, "job": job} if workflow completes successfully
@@ -100,13 +96,9 @@ def run_job_creation_workflow(db: Session, job_in: JobCreate, creator_id: UUID) 
         "input_data": job_in.model_dump(mode="json"),
         "db": db,
         "errors": [],
-        "ai_summary": None,
-        "ai_extracted_metadata": None,
-        "ai_keywords": None,
-        "embedding_text": None,
-        "embedding_vector": None,
-        "embedding_dimension": None,
-        "embedding_model_name": None,
+        "validation_result": None,
+        "ai_summary_data": None,
+        "vectordb_id": None,
         "needs_clarification": None,
         "questions": None
     }
@@ -137,8 +129,7 @@ def run_job_creation_workflow(db: Session, job_in: JobCreate, creator_id: UUID) 
 
 def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
     """
-    On-demand triggering of AI summarization, skill extraction,
-    and keyword generation. Updates metadata directly.
+    On-demand triggering of AI summarization using simplified workflow.
     """
     job = get_job(db, job_id)
     if not job:
@@ -146,14 +137,7 @@ def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
 
     input_data = {
         "job_title": job.job_title,
-        "department": job.department,
         "job_description": job.job_description,
-        "responsibilities": job.responsibilities,
-        "education_requirements": job.education_requirements,
-        "certifications": job.certifications,
-        "required_skills": job.required_skills,
-        "experience_min": job.experience_min,
-        "experience_max": job.experience_max,
     }
 
     state: JobWorkflowState = {
@@ -163,36 +147,20 @@ def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
         "input_data": input_data,
         "db": db,
         "errors": [],
-        "ai_summary": None,
-        "ai_extracted_metadata": None,
-        "ai_keywords": None,
-        "embedding_text": None,
-        "embedding_vector": None,
-        "embedding_dimension": None,
-        "embedding_model_name": None
+        "validation_result": None,
+        "ai_summary_data": None,
+        "vectordb_id": None,
+        "needs_clarification": None,
+        "questions": None
     }
 
     try:
-        summary_result = generate_ai_summary_node(state)
-        if summary_result.get("errors"):
-            return {"success": False, "errors": summary_result["errors"]}
-        state["ai_summary"] = summary_result.get("ai_summary")
+        # Run the simplified workflow
+        final_state = job_workflow.invoke(state)
+        
+        if final_state.get("errors"):
+            return {"success": False, "errors": final_state["errors"]}
 
-        skills_result = extract_skills_node(state)
-        if skills_result.get("errors"):
-            return {"success": False, "errors": skills_result["errors"]}
-        state["ai_extracted_metadata"] = skills_result.get("ai_extracted_metadata")
-
-        keywords_result = generate_searchable_keywords_node(state)
-        if keywords_result.get("errors"):
-            return {"success": False, "errors": keywords_result["errors"]}
-        state["ai_keywords"] = keywords_result.get("ai_keywords")
-
-        update_result = update_ai_metadata_node(state)
-        if update_result.get("errors"):
-            return {"success": False, "errors": update_result["errors"]}
-
-        db.refresh(job)
         db.refresh(job)
         return {"success": True, "job": job}
 
@@ -203,8 +171,7 @@ def generate_job_ai_summary(db: Session, job_id: UUID) -> Dict[str, Any]:
 
 def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
     """
-    On-demand generation of job pgvector embeddings. Combines all fields,
-    requests vector from Embedding provider, and saves to pgvector.
+    On-demand generation of job pgvector embeddings using simplified workflow.
     """
     job = get_job(db, job_id)
     if not job:
@@ -212,30 +179,9 @@ def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
 
     input_data = {
         "job_title": job.job_title,
-        "department": job.department,
         "job_description": job.job_description,
-        "responsibilities": job.responsibilities,
-        "education_requirements": job.education_requirements,
-        "certifications": job.certifications,
-        "required_skills": job.required_skills,
-        "experience_min": job.experience_min,
-        "experience_max": job.experience_max,
     }
 
-    extracted = {
-        "primary_skills": job.ai_required_skills,
-        "tools": job.ai_tools,
-        "education": job.education_requirements,  # Fallback
-        "seniority_level": job.ai_seniority_level,
-        "job_category": job.ai_job_category,
-    }
-
-    keywords = {
-        "keywords": job.ai_keywords,
-        "must_have_keywords": job.ai_must_have_keywords,
-        "nice_to_have_keywords": job.ai_nice_to_have_keywords,
-    }
-    Keywords = { }
     state: JobWorkflowState = {
         "job_id": job_id,
         "company_id": job.company_id,
@@ -243,35 +189,21 @@ def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
         "input_data": input_data,
         "db": db,
         "errors": [],
-        "ai_summary": job.ai_summary,
-        "ai_extracted_metadata": extracted,
-        "ai_keywords": keywords,
-        "embedding_text": None,
-        "embedding_vector": None,
-        "embedding_dimension": None,
-        "embedding_model_name": None
+        "validation_result": None,
+        "ai_summary_data": None,
+        "vectordb_id": None,
+        "needs_clarification": None,
+        "questions": None
     }
 
     try:
-        text_result = create_embedding_text_node(state)
-        state["embedding_text"] = text_result.get("embedding_text")
+        # Run the simplified workflow
+        final_state = job_workflow.invoke(state)
+        
+        if final_state.get("errors"):
+            return {"success": False, "errors": final_state["errors"]}
 
-        vector_result = generate_embedding_node(state)
-        if vector_result.get("errors"):
-            return {"success": False, "errors": vector_result["errors"]}
-        state["embedding_vector"] = vector_result.get("embedding_vector")
-        state["embedding_dimension"] = vector_result.get("embedding_dimension")
-        state["embedding_model_name"] = vector_result.get("embedding_model_name")
-
-        store_result = store_vector_node(state)
-        if store_result.get("errors"):
-            return {"success": False, "errors": store_result["errors"]}
-
-        job.ai_embedding_status = True
-        job.ai_embedding_status = True
-        db.commit()
         db.refresh(job)
-
         embedding_record = db.query(JobEmbedding).filter(JobEmbedding.job_id == job_id).first()
         return {"success": True, "embedding": embedding_record}
 
@@ -283,7 +215,7 @@ def generate_job_embedding(db: Session, job_id: UUID) -> Dict[str, Any]:
 def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, str]], user_id: UUID) -> Dict[str, Any]:
     """
     Submit answers to clarifying questions and update the existing job.
-    Does NOT create a new job - only updates the existing one.
+    Uses simplified workflow for re-processing after answers.
     
     Args:
         answers: Dictionary mapping question IDs to {answer: str, field_name: str}
@@ -299,7 +231,10 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
         if not field_name or not answer:
             continue
         
-        if hasattr(job, field_name):
+        # Update job description if that's the field being updated
+        if field_name == "job_description":
+            job.job_description = answer
+        elif hasattr(job, field_name):
             if field_name in ["experience_min", "experience_max", "salary_min", "salary_max", "vacancies", "notice_period_max"]:
                 try:
                     setattr(job, field_name, int(answer) if "experience" in field_name or "vacancies" in field_name or "notice" in field_name else float(answer))
@@ -315,149 +250,39 @@ def submit_job_answers(db: Session, job_id: UUID, answers: Dict[str, Dict[str, s
     db.commit()
     db.refresh(job)
     
-    from app.core.job_settings import get_fields_to_ask
-    from app.services.workflow import is_insufficient_data, generate_clarifying_questions_node
-    
+    # Re-run simplified workflow to regenerate AI summary and embedding
     input_data = {
         "job_title": job.job_title,
         "job_description": job.job_description,
-        "department": job.department,
-        "responsibilities": job.responsibilities,
-        "required_skills": job.required_skills,
-        "education_requirements": job.education_requirements,
-        "experience_min": job.experience_min,
-        "experience_max": job.experience_max,
-        "vacancies": job.vacancies,
-        "certifications": job.certifications,
-        "industry": job.industry,
-        "team_name": job.team_name,
-        "project_name": job.project_name,
-        "internal_notes": job.internal_notes,
     }
-    
-    fields_to_ask = get_fields_to_ask()
-    insufficient_fields = []
-    for field_config in fields_to_ask:
-        field_name = field_config["field_name"]
-        description = field_config["description"]
-        value = input_data.get(field_name)
-        if is_insufficient_data(value):
-            insufficient_fields.append((field_name, description, value))
-    
-    if insufficient_fields:
-        state = {
-            "input_data": input_data,
-            "job_id": str(job_id),
-        }
-        question_result = generate_clarifying_questions_node(state)
-        if question_result.get("needs_clarification"):
-            return {
-                "success": True,
-                "needs_clarification": True,
-                "questions": question_result.get("questions", []),
-                "job_id": str(job_id)
-            }
-    
-    
-    logger.info("All data complete, triggering full AI workflow for embedding generation")
-    
-    
-    complete_input_data = {
-        "job_title": job.job_title,
-        "job_code": job.job_code,
-        "department": job.department,
-        "experience_min": job.experience_min,
-        "experience_max": job.experience_max,
-        "vacancies": job.vacancies,
-        "job_description": job.job_description,
-        "responsibilities": job.responsibilities,
-        "required_skills": job.required_skills,
-        "education_requirements": job.education_requirements,
-        "certifications": job.certifications,
-        "industry": job.industry,
-        "team_name": job.team_name,
-        "project_name": job.project_name,
-        "internal_notes": job.internal_notes,
-        "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
-    }
-    
-    from app.services.workflow import (
-        generate_ai_summary_node, extract_skills_node, generate_searchable_keywords_node,
-        create_embedding_text_node, generate_embedding_node, store_vector_node,
-        update_ai_metadata_node, JobWorkflowState
-    )
     
     state: JobWorkflowState = {
         "job_id": job_id,
         "company_id": job.company_id,
         "created_by": job.created_by,
-        "input_data": complete_input_data,
+        "input_data": input_data,
         "db": db,
         "errors": [],
-        "ai_summary": None,
-        "ai_extracted_metadata": None,
-        "ai_keywords": None,
-        "embedding_text": None,
-        "embedding_vector": None,
-        "embedding_dimension": None,
-        "embedding_model_name": None,
+        "validation_result": None,
+        "ai_summary_data": None,
+        "vectordb_id": None,
         "needs_clarification": None,
         "questions": None
     }
     
     try:
-        # Generate AI summary
-        summary_result = generate_ai_summary_node(state)
-        if summary_result.get("errors"):
-            logger.error(f"AI summary generation failed: {summary_result['errors']}")
-        else:
-            state["ai_summary"] = summary_result.get("ai_summary")
+        # Run the simplified workflow
+        final_state = job_workflow.invoke(state)
         
-        # Extract skills
-        skills_result = extract_skills_node(state)
-        if skills_result.get("errors"):
-            logger.error(f"Skills extraction failed: {skills_result['errors']}")
-        else:
-            state["ai_extracted_metadata"] = skills_result.get("ai_extracted_metadata")
-        
-        # Generate keywords
-        keywords_result = generate_searchable_keywords_node(state)
-        if keywords_result.get("errors"):
-            logger.error(f"Keywords generation failed: {keywords_result['errors']}")
-        else:
-            state["ai_keywords"] = keywords_result.get("ai_keywords")
-        
-        # Update AI metadata
-        update_result = update_ai_metadata_node(state)
-        if update_result.get("errors"):
-            logger.error(f"AI metadata update failed: {update_result['errors']}")
-        
-        # Create embedding text
-        text_result = create_embedding_text_node(state)
-        if text_result.get("errors"):
-            logger.error(f"Embedding text creation failed: {text_result['errors']}")
-        else:
-            state["embedding_text"] = text_result.get("embedding_text")
-        
-        # Generate embedding
-        vector_result = generate_embedding_node(state)
-        if vector_result.get("errors"):
-            logger.error(f"Embedding generation failed: {vector_result['errors']}")
-        else:
-            state["embedding_vector"] = vector_result.get("embedding_vector")
-            state["embedding_dimension"] = vector_result.get("embedding_dimension")
-            state["embedding_model_name"] = vector_result.get("embedding_model_name")
-        
-        # Store vector
-        store_result = store_vector_node(state)
-        if store_result.get("errors"):
-            logger.error(f"Vector storage failed: {store_result['errors']}")
+        if final_state.get("errors"):
+            logger.warning(f"Re-processing workflow had errors: {final_state['errors']}")
+            # Don't fail the entire operation, just log it
         
         db.refresh(job)
-        logger.info("Full AI workflow completed successfully for job embedding generation")
+        logger.info("Job updated and re-processed successfully")
         
     except Exception as e:
-        logger.exception("Failed to run full AI workflow after answer submission")
-        # Don't fail the entire operation if AI workflow fails, just log it
+        logger.exception("Failed to re-process job after answer submission")
+        # Don't fail the entire operation if workflow fails, just log it
     
     return {"success": True, "job": job}
