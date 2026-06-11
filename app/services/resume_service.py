@@ -22,6 +22,7 @@ from app.models.resume import (
     ResumeValidationStatus,
 )
 from app.services.workflow import parse_json_response
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,22 @@ RESUME_KEYWORDS = {
     "employment",
     "certifications",
 }
+FINANCIAL_DOC_PATTERNS = [
+    r"total amount due",
+    r"bill to\s*:",
+    r"invoice\s*#\s*\d+",
+    r"invoice\s+number\s*:",
+    r"purchase order\s*#",
+    r"tax invoice",
+    r"payment due\s*(date|by)",
+    r"subtotal\s*[:\$]",
+    r"amount payable",
+]
+RESUME_PROJECT_CONTEXT = [
+    r"(built|developed|created|designed|managed|automated|integrated|processed)\b.{0,60}\binvoice",
+    r"\binvoice.{0,60}(system|module|portal|platform|application|software|tool|feature|api|service)",
+    r"(project|experience|work).{0,200}\binvoice",
+]
 
 
 def get_job_or_none(db: Session, job_id: UUID) -> Job | None:
@@ -281,14 +298,40 @@ def extract_resume_text(storage_path: str) -> str:
     return path.read_text(encoding="utf-8", errors="ignore").strip()
 
 
+def is_financial_document(text: str) -> bool:
+    """
+    Returns True only if the document structurally looks like an invoice/receipt,
+    not just if it mentions invoice-related words.
+    """
+    lowered = text.lower()
+
+    financial_hits = sum(
+        1 for pattern in FINANCIAL_DOC_PATTERNS
+        if re.search(pattern, lowered)
+    )
+    if financial_hits >= 2:
+        return True
+
+    if "invoice" in lowered:
+        in_project_context = any(
+            re.search(pattern, lowered) for pattern in RESUME_PROJECT_CONTEXT
+        )
+        if in_project_context:
+            return False
+
+        return False
+
+    return False
+
+
 def validate_resume_text(text: str) -> tuple[bool, str | None]:
     if len(text.strip()) < 200:
         return False, "File does not contain enough readable resume text"
 
-    lowered = text.lower()
-    if any(word in lowered for word in ["invoice", "purchase order", "tax invoice", "receipt"]):
-        return False, "File appears to be a non-resume document"
+    if is_financial_document(text):
+        return False, "File appears to be a non-resume document (invoice/receipt)"
 
+    lowered = text.lower()
     signal_count = sum(1 for keyword in RESUME_KEYWORDS if keyword in lowered)
     if extract_email(text) or extract_phone(text):
         signal_count += 1
@@ -542,7 +585,8 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 def score_experience(job: Job, candidate: Candidate) -> float:
     years = float(candidate.total_experience_years or 0)
     experience_min = float(job.experience_min or 0)
-    experience_max = float(job.experience_max) if job.experience_max is not None else None
+    experience_max = float(
+        job.experience_max) if job.experience_max is not None else None
 
     if years >= experience_min and (experience_max is None or years <= experience_max):
         return 100.0
