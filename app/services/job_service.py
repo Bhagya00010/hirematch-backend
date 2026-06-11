@@ -128,7 +128,7 @@ def run_job_creation_workflow(
     """
     state: JobWorkflowState = {
         "job_id": None,
-        "company_id": job_in.company_id,
+        "company_id": job_in.user_id,  # Use user_id as company_id for now
         "created_by": creator_id,
         "input_data": job_in.model_dump(mode="json"),
         "db": db,

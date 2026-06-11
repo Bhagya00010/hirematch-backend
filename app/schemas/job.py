@@ -29,7 +29,7 @@ class JobBase(BaseModel):
 
 
 class JobCreate(JobBase):
-    company_id: UUID = Field(default=UUID("00000000-0000-0000-0000-000000000000"), description="Company ID associated with the job")
+    user_id: UUID = Field(..., description="User ID creating the job")
 
 
 
