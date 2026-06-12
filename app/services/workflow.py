@@ -10,7 +10,7 @@ from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 
 from app.core.llm import get_llm, get_embeddings
-from app.models.job import Job, JobEmbedding
+from app.models.job import EmploymentType, Job, JobEmbedding
 from app.core.job_settings import (
     get_critical_fields, get_optional_fields,
     is_validation_enabled, is_ai_enabled, is_embedding_enabled,
@@ -317,6 +317,8 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
             existing.job_description = input_data.get('job_description')
             if input_data.get('job_title'):
                 existing.job_title = input_data['job_title']
+            if input_data.get('employment_type') is not None:
+                existing.employment_type = input_data['employment_type'] or EmploymentType.FULL_TIME
             existing.ai_summary = ai.get('summary')
             if ai.get('experience_min') is not None:
                 existing.experience_min = ai['experience_min']
@@ -325,6 +327,7 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
             existing.updated_at = datetime.utcnow()
             logger.info(f"Updated job: {job_id}")
         else:
+            employment_type = input_data.get('employment_type') or EmploymentType.FULL_TIME
             job = Job(
                 job_id=job_id,
                 company_id=state["company_id"],
@@ -333,6 +336,7 @@ def store_simplified_job_node(state: JobWorkflowState) -> Dict[str, Any]:
                 job_title=input_data.get('job_title') or 'Untitled Position',
                 job_code='AUTO-' + str(job_id)[:8],
                 department='General',
+                employment_type=employment_type,
                 responsibilities=ai.get('summary', ''),
                 required_skills=ai.get('skills', []),
                 education_requirements='',

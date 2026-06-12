@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List, Optional
-
+from app.services import job_service
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
@@ -69,6 +69,17 @@ def list_jobs(
 ):
     """List jobs with optional status filter and keyword search."""
     return job_service.get_jobs(db, skip=skip, limit=limit, status=status, search=search)
+
+
+@router.get("/my-jobs", response_model=list[JobResponse])
+def get_my_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return job_service.get_user_jobs(
+        db=db,
+        user_id=current_user.id,
+    )
 
 
 @router.get("/{id}", response_model=JobResponse)
