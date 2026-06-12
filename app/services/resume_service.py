@@ -328,22 +328,45 @@ def validate_resume_text(text: str) -> tuple[bool, str | None]:
     if len(text.strip()) < 200:
         return False, "File does not contain enough readable resume text"
 
-    if is_financial_document(text):
-        return False, "File appears to be a non-resume document (invoice/receipt)"
+    # Use AI to validate if the document is a resume
+    try:
+        llm = get_llm(temperature=0.1)
+        prompt = f"""Analyze the following text and determine if it is a resume/CV or another type of document.
 
-    lowered = text.lower()
-    signal_count = sum(1 for keyword in RESUME_KEYWORDS if keyword in lowered)
-    if extract_email(text) or extract_phone(text):
-        signal_count += 1
-    if extract_years_experience(text) is not None:
-        signal_count += 1
-    if re.search(r"\b(node\.?js|python|react|java|javascript|typescript|sql|aws|docker|fastapi)\b", lowered):
-        signal_count += 1
+Return ONLY valid JSON with these keys:
+is_resume: boolean (true if it's a resume/CV, false otherwise)
+reason: string (brief explanation of your decision)
 
-    if signal_count < 2:
-        return False, "File content does not look like a valid resume"
+Text to analyze:
+{text[:8000]}
+"""
+        response = llm.invoke(prompt)
+        content = response.content if hasattr(response, "content") else str(response)
+        parsed = parse_json_response(content)
+        
+        is_resume = parsed.get("is_resume", False)
+        reason = parsed.get("reason", "Unknown")
+        
+        if not is_resume:
+            return False, f"File appears to be a non-resume document: {reason}"
+        
+        return True, None
+    except Exception as exc:
+        logger.warning("AI resume validation failed, using fallback: %s", exc)
+        # Fallback to keyword-based validation
+        lowered = text.lower()
+        signal_count = sum(1 for keyword in RESUME_KEYWORDS if keyword in lowered)
+        if extract_email(text) or extract_phone(text):
+            signal_count += 1
+        if extract_years_experience(text) is not None:
+            signal_count += 1
+        if re.search(r"\b(node\.?js|python|react|java|javascript|typescript|sql|aws|docker|fastapi)\b", lowered):
+            signal_count += 1
 
-    return True, None
+        if signal_count < 2:
+            return False, "File content does not look like a valid resume"
+
+        return True, None
 
 
 def extract_candidate_details(text: str) -> dict[str, Any]:

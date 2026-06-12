@@ -92,6 +92,11 @@ def get_jobs(
     return query.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
 
 
+def get_user_jobs(db: Session, user_id: UUID) -> List[Job]:
+    """Get all jobs created by a specific user."""
+    return db.query(Job).filter(Job.created_by == user_id).order_by(Job.created_at.desc()).all()
+
+
 def delete_job(db: Session, job_id: UUID) -> bool:
     job = get_job(db, job_id)
     if not job:
