@@ -182,27 +182,46 @@ def update_me(
     current_user: User = Depends(get_current_user),
     _: None = Depends(write_rate_limiter),
 ) -> APIResponse:
+
     if payload.full_name is not None:
         current_user.full_name = payload.full_name.strip()
+
+    if payload.email is not None:
+        current_user.email = payload.email
+
+    if payload.phone_number is not None:
+        current_user.phone_number = payload.phone_number
+
+    if payload.company_name is not None:
+        current_user.company_name = payload.company_name
 
     if payload.is_active is not None:
         current_user.is_active = payload.is_active
 
     if payload.new_password is not None:
+
         if payload.old_password is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Old password is required to change password",
             )
-        if not verify_password(payload.old_password, current_user.password_hash):
+
+        if not verify_password(
+            payload.old_password,
+            current_user.password_hash,
+        ):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Old password is incorrect",
             )
-        current_user.password_hash = get_password_hash(payload.new_password)
+
+        current_user.password_hash = get_password_hash(
+            payload.new_password
+        )
 
     db.commit()
     db.refresh(current_user)
+
     return APIResponse(
         data=UserOut.model_validate(current_user).model_dump(mode="json"),
         message="Profile updated",

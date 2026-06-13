@@ -796,6 +796,321 @@
       ]
     },
     {
+      "name": "ATS",
+      "item": [
+        {
+          "name": "Get ATS Config",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is valid ATS config', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('id');",
+                  "  pm.expect(json).to.have.property('company_id');",
+                  "  pm.expect(json).to.have.property('config_name', 'default');",
+                  "  pm.expect(json).to.have.property('weight_must_have');",
+                  "  pm.expect(json).to.have.property('retrieval_top_n');",
+                  "  pm.expect(json).to.have.property('llm_weight');",
+                  "  pm.collectionVariables.set('ats_config_id', json.id);",
+                  "  pm.collectionVariables.set('company_id', json.company_id);",
+                  "});",
+                  "",
+                  "pm.test('ATS weights total 1.000', function () {",
+                  "  const json = pm.response.json();",
+                  "  const total = Number(json.weight_must_have)",
+                  "    + Number(json.weight_semantic)",
+                  "    + Number(json.weight_project_impact)",
+                  "    + Number(json.weight_domain)",
+                  "    + Number(json.weight_education);",
+                  "  pm.expect(Math.round(total * 1000) / 1000).to.eql(1.0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ats",
+              "host": ["{{base_url}}"],
+              "path": ["ats"]
+            },
+            "description": "Returns the current user's ATS config. Creates default config on first call."
+          },
+          "response": []
+        },
+        {
+          "name": "Update ATS Config - Retrieval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Retrieval settings updated', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.retrieval_top_n).to.eql(75);",
+                  "  pm.expect(json.llm_rerank_top_n).to.eql(15);",
+                  "  pm.expect(Number(json.vector_weight)).to.eql(0.65);",
+                  "  pm.expect(Number(json.bm25_weight)).to.eql(0.35);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"retrieval_top_n\": 75,\n  \"llm_rerank_top_n\": 15,\n  \"vector_weight\": 0.650,\n  \"bm25_weight\": 0.350\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ats",
+              "host": ["{{base_url}}"],
+              "path": ["ats"]
+            },
+            "description": "Updates retrieval settings. vector_weight + bm25_weight must equal 1.000."
+          },
+          "response": []
+        },
+        {
+          "name": "Update ATS Config - Weights",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('ATS and experience weights updated', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(Number(json.weight_must_have)).to.eql(0.55);",
+                  "  pm.expect(Number(json.weight_semantic)).to.eql(0.2);",
+                  "  pm.expect(Number(json.llm_weight)).to.eql(0.25);",
+                  "  pm.expect(Number(json.weight_exp_must_have)).to.eql(0.5);",
+                  "});",
+                  "",
+                  "pm.test('Weight groups still total 1.000', function () {",
+                  "  const json = pm.response.json();",
+                  "  const atsTotal = Number(json.weight_must_have)",
+                  "    + Number(json.weight_semantic)",
+                  "    + Number(json.weight_project_impact)",
+                  "    + Number(json.weight_domain)",
+                  "    + Number(json.weight_education);",
+                  "  const expTotal = Number(json.weight_exp_must_have)",
+                  "    + Number(json.weight_exp_semantic)",
+                  "    + Number(json.weight_exp_project_impact)",
+                  "    + Number(json.weight_exp_experience)",
+                  "    + Number(json.weight_exp_domain)",
+                  "    + Number(json.weight_exp_education);",
+                  "  pm.expect(Math.round(atsTotal * 1000) / 1000).to.eql(1.0);",
+                  "  pm.expect(Math.round(expTotal * 1000) / 1000).to.eql(1.0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weight_must_have\": 0.550,\n  \"weight_semantic\": 0.200,\n  \"weight_project_impact\": 0.100,\n  \"weight_domain\": 0.100,\n  \"weight_education\": 0.050,\n  \"weight_exp_must_have\": 0.500,\n  \"weight_exp_semantic\": 0.150,\n  \"weight_exp_project_impact\": 0.100,\n  \"weight_exp_experience\": 0.150,\n  \"weight_exp_domain\": 0.050,\n  \"weight_exp_education\": 0.050,\n  \"llm_weight\": 0.250,\n  \"mandatory_gate_threshold\": 0.450,\n  \"confidence_min\": 0.800\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ats",
+              "host": ["{{base_url}}"],
+              "path": ["ats"]
+            },
+            "description": "Updates scoring weights and gate settings. Each weight group must total 1.000."
+          },
+          "response": []
+        },
+        {
+          "name": "Update ATS Config - Invalid Weights",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test('Validation error mentions ATS weights', function () {",
+                  "  const json = pm.response.json();",
+                  "  const body = JSON.stringify(json);",
+                  "  pm.expect(body.toLowerCase()).to.include('weight');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weight_must_have\": 0.700,\n  \"weight_semantic\": 0.200,\n  \"weight_project_impact\": 0.100,\n  \"weight_domain\": 0.100,\n  \"weight_education\": 0.050\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ats",
+              "host": ["{{base_url}}"],
+              "path": ["ats"]
+            },
+            "description": "Negative test. ATS weights total 1.150, so API should return 422."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset ATS Config",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Config reset to defaults', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.config_name).to.eql('default');",
+                  "  pm.expect(Number(json.weight_must_have)).to.eql(0.6);",
+                  "  pm.expect(Number(json.weight_semantic)).to.eql(0.15);",
+                  "  pm.expect(json.retrieval_top_n).to.eql(100);",
+                  "  pm.expect(Number(json.llm_weight)).to.eql(0.2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ats/reset",
+              "host": ["{{base_url}}"],
+              "path": ["ats", "reset"]
+            },
+            "description": "Deletes the current ATS config and recreates default values for the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "Get ATS Config - Unauthorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ats",
+              "host": ["{{base_url}}"],
+              "path": ["ats"]
+            },
+            "description": "Negative test. Should fail without Bearer token."
+          },
+          "response": []
+        }
+      ],
+      "description": "ATS configuration APIs. Run Auth > Login first to populate access_token."
+    },
+    {
       "name": "Health",
       "request": {
         "method": "GET",
@@ -836,6 +1151,14 @@
     },
     {
       "key": "candidate_id",
+      "value": ""
+    },
+    {
+      "key": "ats_config_id",
+      "value": ""
+    },
+    {
+      "key": "company_id",
       "value": ""
     }
   ]
