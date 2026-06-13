@@ -10,6 +10,7 @@ from app.models.resume import (
     ResumeValidationStatus,
 )
 from app.models.job import Job, JobEmbedding, JobStatus
+from app.models.ats_config import ATSConfig
 
 __all__ = [
     "PasswordResetToken",
@@ -26,4 +27,5 @@ __all__ = [
     "MatchResult",
     "ResumeProcessingStatus",
     "ResumeValidationStatus",
+    "ATSConfig",
 ]
