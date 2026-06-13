@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -106,3 +106,5 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    phone_number = Column(String, nullable=True)
+    company_name = Column(String, nullable=True)
