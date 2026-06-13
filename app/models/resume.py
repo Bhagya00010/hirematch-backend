@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func, JSON
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -84,6 +84,8 @@ class Candidate(Base):
     tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     sector_experience: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     raw_text: Mapped[str | None] = mapped_column(Text)
+    projects_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    experience_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     embedding_id: Mapped[str | None] = mapped_column(String(200))
     is_duplicate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

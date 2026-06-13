@@ -1566,6 +1566,19 @@ def process_single_resume(db: Session, resume_file: ResumeFile) -> None:
         candidate.sector_experience      = normalize_list(parsed.get("sector_experience"))
         candidate.raw_text               = raw_text
         candidate.is_duplicate           = duplicate
+        
+        # Extract projects from raw text and store as JSON
+        projects = extract_projects_from_raw_text(raw_text)
+        candidate.projects_json = {
+            "projects": projects
+        } if projects else None
+        
+        # Extract experience sectors and store as JSON
+        candidate.experience_json = {
+            "sectors": normalize_list(parsed.get("sector_experience")),
+            "total_years": parse_optional_float(parsed.get("total_experience_years"))
+        } if parsed.get("sector_experience") or parsed.get("total_experience_years") else None
+        
         if hasattr(candidate, "extra_data") and parsed.get("skill_proficiency"):
             candidate.extra_data = {
                 **(candidate.extra_data or {}),
@@ -1830,8 +1843,55 @@ def get_candidates_for_job(db: Session, job_id: UUID) -> list[Candidate]:
     )
 
 
-def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[MatchResult]:
-    return (
+def extract_projects_from_raw_text(raw_text: str | None) -> list[dict]:
+    """Extract projects from candidate's raw text using simple pattern matching."""
+    if not raw_text:
+        return []
+    
+    import re
+    
+    projects = []
+    lines = raw_text.split('\n')
+    
+    current_project = None
+    in_project_section = False
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Detect project section
+        if 'project' in line.lower() and ':' in line:
+            in_project_section = True
+            continue
+        
+        # Detect project name (numbered or standalone)
+        if in_project_section and (line.startswith('Project') or re.match(r'^\d+\.', line)):
+            if current_project:
+                projects.append(current_project)
+            current_project = {
+                "name": line.replace('Project', '').replace(':', '').strip(),
+                "description": "",
+                "technologies": []
+            }
+        elif current_project:
+            # Extract description
+            if line.lower().startswith('description'):
+                current_project["description"] = line.replace('Description:', '').replace('description:', '').strip()
+            # Extract technologies
+            elif 'technologies' in line.lower() or 'tech stack' in line.lower():
+                tech_line = line.replace('Technologies used:', '').replace('technologies used:', '').replace('Technologies:', '').replace('technologies:', '').strip()
+                current_project["technologies"] = [t.strip() for t in tech_line.split(',') if t.strip()]
+    
+    if current_project:
+        projects.append(current_project)
+    
+    return projects
+
+
+def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]:
+    from app.schemas.resume import ScoreBreakdown, Project
+    
+    results = (
         db.query(MatchResult)
         .options(joinedload(MatchResult.candidate))
         .filter(MatchResult.job_posting_id == job_id)
@@ -1842,6 +1902,77 @@ def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[Match
         .limit(limit)
         .all()
     )
+    
+    # Transform to new response structure with score breakdown
+    response_data = []
+    for r in results:
+        # Calculate keyword score from matched_keywords
+        keyword_score = None
+        if r.matched_keywords is not None and r.matched_keywords:
+            # This is a rough calculation - adjust as needed
+            keyword_score = len(r.matched_keywords) * 10  # Simple calculation
+        
+        score_breakdown = ScoreBreakdown(
+            semantic_score=float(r.semantic_score) if r.semantic_score else None,
+            bm25_score=float(r.bm25_score) if r.bm25_score else None,
+            keyword_score=keyword_score,
+            skill_score=float(r.score_skill) if r.score_skill else None,
+            tech_stack_score=float(r.score_tech_stack) if r.score_tech_stack else None,
+            experience_score=float(r.score_experience) if r.score_experience else None,
+            education_score=float(r.score_education) if r.score_education else None,
+            sector_score=float(r.score_sector) if r.score_sector else None,
+            other_skills_score=float(r.score_other_skills) if r.score_other_skills else None,
+        )
+        
+        # Use projects from JSON field if available, otherwise extract from raw text
+        if r.candidate and r.candidate.projects_json:
+            projects = r.candidate.projects_json.get("projects", [])
+        else:
+            projects = extract_projects_from_raw_text(r.candidate.raw_text if r.candidate else None)
+        
+        # Build candidate dict with projects
+        candidate_dict = None
+        if r.candidate:
+            candidate_dict = {
+                "id": str(r.candidate.id),
+                "resume_file_id": str(r.candidate.resume_file_id),
+                "full_name": r.candidate.full_name,
+                "email": r.candidate.email,
+                "phone": r.candidate.phone,
+                "total_experience_years": float(r.candidate.total_experience_years) if r.candidate.total_experience_years else None,
+                "education_degree": r.candidate.education_degree,
+                "education_field": r.candidate.education_field,
+                "skills": r.candidate.skills,
+                "tech_stack": r.candidate.tech_stack,
+                "sector_experience": r.candidate.sector_experience,
+                "raw_text": r.candidate.raw_text,
+                "embedding_id": r.candidate.embedding_id,
+                "is_duplicate": r.candidate.is_duplicate,
+                "created_at": r.candidate.created_at,
+                "projects": [Project(**p) for p in projects],
+                "storage_path": r.candidate.resume_file.storage_path if r.candidate.resume_file else None,
+                "original_filename": r.candidate.resume_file.original_filename if r.candidate.resume_file else None,
+            }
+        
+        response_data.append({
+            "id": str(r.id),
+            "job_posting_id": str(r.job_posting_id),
+            "candidate_id": str(r.candidate_id),
+            "overall_score": float(r.overall_score),
+            "rank_position": r.rank_position,
+            "created_at": r.created_at,
+            "candidate": candidate_dict,
+            "ai_summary": r.ai_summary,
+            "matched_skills": r.matched_skills if r.matched_skills else r.matched_tech_stack,
+            "missing_skills": r.missing_skills,
+            "matched_tech_stack": r.matched_tech_stack,
+            "missing_tech_stack": r.missing_tech_stack,
+            "matched_keywords": r.matched_keywords,
+            "unmatched_keywords": r.unmatched_keywords,
+            "score_breakdown": score_breakdown,
+        })
+    
+    return response_data
 
 
 def parse_optional_float(value: Any) -> float | None:

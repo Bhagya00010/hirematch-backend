@@ -88,6 +88,47 @@ async def stream_resume_processing(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/file")
+async def get_resume_file(
+    path: str = Query(..., description="Storage path of the resume file"),
+    db: Session = Depends(get_db),
+):
+    """Fetch resume file content from storage path."""
+    import os
+    from app.core.config import settings
+    
+    # Security check: ensure path is within allowed directory
+    if not path or ".." in path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file path"
+        )
+    
+    full_path = os.path.join(settings.RESUME_UPLOAD_DIR, path)
+    
+    if not os.path.exists(full_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found"
+        )
+    
+    if not os.path.isfile(full_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path is not a file"
+        )
+    
+    try:
+        with open(full_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return {"content": content}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading file: {str(e)}"
+        )
+
+
 @router.delete("/{job_id}/resumes/{resume_file_id}", response_model=ResumeDeleteResponse)
 def delete_resume(
     job_id: UUID,
@@ -138,13 +179,13 @@ def run_match(
     return resume_service.run_matching(db, job_id)
 
 
-@router.get("/{job_id}/match/results", response_model=list[MatchResultResponse])
+@router.get("/{job_id}/match/results")
 def match_results(
     job_id: UUID,
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    """List ranked match results for a job."""
+    """List ranked match results for a job with detailed score breakdown."""
     if not resume_service.get_job_or_none(db, job_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
