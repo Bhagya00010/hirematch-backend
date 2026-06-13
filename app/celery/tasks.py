@@ -29,20 +29,34 @@ def create_job_embedding_task(self, job_id: str) -> dict:
             logger.error(f"Job not found for embedding: {job_id}")
             return {"success": False, "error": "Job not found"}
         
-        # Build embedding text
-        ai_summary_data = {
-            "summary": job.ai_summary or "",
-            "responsibilities": job.required_skills or [],  # Using required_skills as fallback
-            "skills": job.required_skills or []
-        }
+        # Build consolidated embedding text as per hybrid search architecture
+        embedding_text = f"""Title: {job.job_title}
+
+Summary: {job.ai_summary or job.job_description}
+
+Skills:
+{', '.join(job.ai_required_skills or job.required_skills or [])}
+
+Tools:
+{', '.join(job.ai_tools or [])}
+
+Technologies:
+{', '.join(job.ai_technologies or [])}
+
+Industry:
+{job.industry or ''}
+
+Keywords:
+{', '.join(job.ai_keywords or job.ai_must_have_keywords or [])}""".strip()
         
-        parts = [
-            job.job_description,
-            ai_summary_data.get('summary', ''),
-            ' '.join(ai_summary_data.get('responsibilities', [])),
-            ' '.join(ai_summary_data.get('skills', []))
-        ]
-        embedding_text = ' '.join(p for p in parts if p).strip()
+        logger.info(f"=== JOB EMBEDDING GENERATION ===")
+        logger.info(f"Job ID: {job_id}")
+        logger.info(f"Job Title: {job.job_title}")
+        logger.info(f"Embedding text length: {len(embedding_text)} characters")
+        logger.info(f"Embedding text preview: {embedding_text[:500]}...")
+        logger.info(f"AI Required Skills: {job.ai_required_skills}")
+        logger.info(f"AI Tools: {job.ai_tools}")
+        logger.info(f"AI Technologies: {job.ai_technologies}")
         
         # Create embedding
         vector = get_embeddings().embed_query(embedding_text)
