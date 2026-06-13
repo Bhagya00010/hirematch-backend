@@ -99,7 +99,7 @@ JOB_FIELDS = [
 
 VALIDATION_SETTINGS = {
     "enabled": True,
-    "critical_fields": ["responsibilities", "required_skills"],
+    "critical_fields": ["required_skills"],  # Removed 'responsibilities' - AI extraction handles it
     "optional_fields": ["project_name", "project_sector", "experience_min", "experience_max"],
     "ask_questions_on_critical_missing": True,
     "ask_questions_on_optional_missing": False,

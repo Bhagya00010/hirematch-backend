@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func, JSON
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -84,6 +84,8 @@ class Candidate(Base):
     tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     sector_experience: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     raw_text: Mapped[str | None] = mapped_column(Text)
+    projects_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    experience_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     embedding_id: Mapped[str | None] = mapped_column(String(200))
     is_duplicate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -140,10 +142,15 @@ class MatchResult(Base):
     score_experience: Mapped[float | None] = mapped_column(Numeric(5, 2))
     score_sector: Mapped[float | None] = mapped_column(Numeric(5, 2))
     score_tech_stack: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    score_skill: Mapped[float | None] = mapped_column(Numeric(5, 2))
     score_education: Mapped[float | None] = mapped_column(Numeric(5, 2))
     score_other_skills: Mapped[float | None] = mapped_column(Numeric(5, 2))
     matched_keywords: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     unmatched_keywords: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
+    matched_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
+    missing_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
+    matched_tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
+    missing_tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     bm25_score: Mapped[float | None] = mapped_column(Numeric(8, 4))
     semantic_score: Mapped[float | None] = mapped_column(Numeric(8, 4))
     rank_position: Mapped[int | None] = mapped_column(Integer, index=True)

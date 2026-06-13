@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Numeric, Boolean, Text, DateTime, ForeignKey, Enum, func
+from sqlalchemy import String, Integer, Numeric, Boolean, Text, DateTime, ForeignKey, Enum, func, JSON
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -73,6 +73,7 @@ class Job(Base):
     ai_soft_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True, default=list)
     ai_domain_experience: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True, default=list)
     ai_embedding_status: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    skill_tiers: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -27,6 +27,12 @@ class ResumeUploadResponse(BaseModel):
     resumes: list[ResumeFileResponse]
 
 
+class Project(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    technologies: list[str] | None = None
+
+
 class CandidateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +51,7 @@ class CandidateResponse(BaseModel):
     embedding_id: str | None = None
     is_duplicate: bool
     created_at: datetime
+    projects: list[Project] | None = None
 
 
 class ProcessingLogItem(BaseModel):
@@ -62,6 +69,18 @@ class ResumeProcessResponse(BaseModel):
     logs: list[ProcessingLogItem]
 
 
+class ScoreBreakdown(BaseModel):
+    semantic_score: float | None = None
+    bm25_score: float | None = None
+    keyword_score: float | None = None
+    skill_score: float | None = None
+    tech_stack_score: float | None = None
+    experience_score: float | None = None
+    education_score: float | None = None
+    sector_score: float | None = None
+    other_skills_score: float | None = None
+
+
 class MatchResultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -69,19 +88,25 @@ class MatchResultResponse(BaseModel):
     job_posting_id: UUID
     candidate_id: UUID
     overall_score: float
-    score_experience: float | None = None
-    score_sector: float | None = None
-    score_tech_stack: float | None = None
-    score_education: float | None = None
-    score_other_skills: float | None = None
+    rank_position: int | None = None
+    created_at: datetime
+    
+    # Candidate details
+    candidate: CandidateResponse | None = None
+    
+    # AI summary
+    ai_summary: str | None = None
+    
+    # Matched/missing skills
+    matched_skills: list[str] | None = None
+    missing_skills: list[str] | None = None
+    matched_tech_stack: list[str] | None = None
+    missing_tech_stack: list[str] | None = None
     matched_keywords: list[str] | None = None
     unmatched_keywords: list[str] | None = None
-    bm25_score: float | None = None
-    semantic_score: float | None = None
-    rank_position: int | None = None
-    ai_summary: str | None = None
-    created_at: datetime
-    candidate: CandidateResponse | None = None
+    
+    # Score breakdown
+    score_breakdown: ScoreBreakdown | None = None
 
 
 class ResumeDeleteResponse(BaseModel):
