@@ -1535,6 +1535,7 @@ def process_single_resume(db: Session, resume_file: ResumeFile) -> None:
         emb_vec, emb_model = generate_candidate_embedding(raw_text, parsed)
         emb_dim       = len(emb_vec)
 
+        # Check for duplicate resume by file hash for this job
         duplicate = (
             db.query(ResumeFile)
             .join(Candidate, Candidate.resume_file_id == ResumeFile.id)
@@ -1543,8 +1544,16 @@ def process_single_resume(db: Session, resume_file: ResumeFile) -> None:
                 ResumeFile.file_hash_md5  == resume_file.file_hash_md5,
                 ResumeFile.id             != resume_file.id,
             )
-            .first() is not None
+            .first()
         )
+        
+        # If duplicate found, mark this resume file as invalid and skip processing
+        if duplicate:
+            resume_file.validation_status = ResumeValidationStatus.INVALID
+            resume_file.processing_status = ResumeProcessingStatus.FAILED
+            resume_file.rejection_reason = "Duplicate resume hash for this job"
+            db.commit()
+            return {"status": "duplicate", "message": "Duplicate resume detected"}
 
         candidate = (
             db.query(Candidate)
@@ -1894,7 +1903,12 @@ def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]
     results = (
         db.query(MatchResult)
         .options(joinedload(MatchResult.candidate))
-        .filter(MatchResult.job_posting_id == job_id)
+        .join(Candidate, MatchResult.candidate_id == Candidate.id)
+        .join(ResumeFile, Candidate.resume_file_id == ResumeFile.id)
+        .filter(
+            MatchResult.job_posting_id == job_id,
+            Candidate.is_duplicate == False
+        )
         .order_by(
             MatchResult.rank_position.asc().nullslast(),
             MatchResult.overall_score.desc(),
@@ -1902,6 +1916,19 @@ def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]
         .limit(limit)
         .all()
     )
+    
+    # Deduplicate results by candidate full_name to avoid showing same person twice
+    seen_names = set()
+    deduplicated_results = []
+    for r in results:
+        if r.candidate and r.candidate.full_name:
+            if r.candidate.full_name not in seen_names:
+                seen_names.add(r.candidate.full_name)
+                deduplicated_results.append(r)
+        else:
+            deduplicated_results.append(r)
+    
+    results = deduplicated_results
     
     # Transform to new response structure with score breakdown
     response_data = []
@@ -1963,7 +1990,7 @@ def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]
             "created_at": r.created_at,
             "candidate": candidate_dict,
             "ai_summary": r.ai_summary,
-            "matched_skills": r.matched_skills if r.matched_skills else r.matched_tech_stack,
+            "matched_skills": r.matched_skills,
             "missing_skills": r.missing_skills,
             "matched_tech_stack": r.matched_tech_stack,
             "missing_tech_stack": r.missing_tech_stack,
