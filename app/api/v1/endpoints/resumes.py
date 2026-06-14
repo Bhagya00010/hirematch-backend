@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.schemas.resume import (
     CandidateResponse,
     MatchResultResponse,
+    MatchResultModalResponse,
     ResumeDeleteResponse,
     ResumeFileResponse,
     ResumeProcessResponse,
@@ -188,5 +189,12 @@ def match_results(
     """List ranked match results for a job with detailed score breakdown."""
     if not resume_service.get_job_or_none(db, job_id):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    return resume_service.get_match_results(db, job_id, limit=limit)
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    return resume_service.get_match_results(
+        db,
+        job_id,
+        limit=limit
+    )
