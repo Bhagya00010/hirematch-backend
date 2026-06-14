@@ -1898,7 +1898,7 @@ def extract_projects_from_raw_text(raw_text: str | None) -> list[dict]:
 
 
 def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]:
-    from app.schemas.resume import ScoreBreakdown, Project
+    from app.schemas.resume import ScoreBreakdown
     
     results = (
         db.query(MatchResult)
@@ -1952,51 +1952,52 @@ def get_match_results(db: Session, job_id: UUID, limit: int = 100) -> list[dict]
         )
         
         # Use projects from JSON field if available, otherwise extract from raw text
-        if r.candidate and r.candidate.projects_json:
-            projects = r.candidate.projects_json.get("projects", [])
-        else:
-            projects = extract_projects_from_raw_text(r.candidate.raw_text if r.candidate else None)
+        # if r.candidate and r.candidate.projects_json:
+        #     projects = r.candidate.projects_json.get("projects", [])
+        # else:
+        #     projects = extract_projects_from_raw_text(r.candidate.raw_text if r.candidate else None)
         
         # Build candidate dict with projects
         candidate_dict = None
         if r.candidate:
             candidate_dict = {
-                "id": str(r.candidate.id),
-                "resume_file_id": str(r.candidate.resume_file_id),
                 "full_name": r.candidate.full_name,
                 "email": r.candidate.email,
                 "phone": r.candidate.phone,
-                "total_experience_years": float(r.candidate.total_experience_years) if r.candidate.total_experience_years else None,
+                "total_experience_years": (
+                    float(r.candidate.total_experience_years)
+                    if r.candidate.total_experience_years
+                    else None
+                ),
                 "education_degree": r.candidate.education_degree,
-                "education_field": r.candidate.education_field,
-                "skills": r.candidate.skills,
-                "tech_stack": r.candidate.tech_stack,
-                "sector_experience": r.candidate.sector_experience,
+                "skills": r.candidate.skills or [],
+                "tech_stack": r.candidate.tech_stack or [],
+                "sector_experience": r.candidate.sector_experience or [],
                 "raw_text": r.candidate.raw_text,
-                "embedding_id": r.candidate.embedding_id,
-                "is_duplicate": r.candidate.is_duplicate,
-                "created_at": r.candidate.created_at,
-                "projects": [Project(**p) for p in projects],
-                "storage_path": r.candidate.resume_file.storage_path if r.candidate.resume_file else None,
-                "original_filename": r.candidate.resume_file.original_filename if r.candidate.resume_file else None,
             }
-        
         response_data.append({
-            "id": str(r.id),
-            "job_posting_id": str(r.job_posting_id),
-            "candidate_id": str(r.candidate_id),
             "overall_score": float(r.overall_score),
             "rank_position": r.rank_position,
-            "created_at": r.created_at,
+
             "candidate": candidate_dict,
-            "ai_summary": r.ai_summary,
-            "matched_skills": r.matched_skills,
-            "missing_skills": r.missing_skills,
-            "matched_tech_stack": r.matched_tech_stack,
-            "missing_tech_stack": r.missing_tech_stack,
-            "matched_keywords": r.matched_keywords,
-            "unmatched_keywords": r.unmatched_keywords,
-            "score_breakdown": score_breakdown,
+
+            "matched_skills": (
+                r.matched_skills
+                if r.matched_skills
+                else r.matched_tech_stack or []
+            ),
+
+            "score_breakdown": {
+                "semantic_score": score_breakdown.semantic_score,
+                "bm25_score": score_breakdown.bm25_score,
+                "keyword_score": score_breakdown.keyword_score,
+                "skill_score": score_breakdown.skill_score,
+                "tech_stack_score": score_breakdown.tech_stack_score,
+                "experience_score": score_breakdown.experience_score,
+                "education_score": score_breakdown.education_score,
+                "sector_score": score_breakdown.sector_score,
+                "other_skills_score": score_breakdown.other_skills_score,
+            }
         })
     
     return response_data

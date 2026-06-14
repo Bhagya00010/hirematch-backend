@@ -5,7 +5,42 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.resume import ResumeProcessingStatus, ResumeValidationStatus
 
+from typing import Optional
 
+
+class MatchScoreBreakdownResponse(BaseModel):
+    semantic_score: Optional[float] = None
+    bm25_score: Optional[float] = None
+    keyword_score: Optional[float] = None
+    skill_score: Optional[float] = None
+    tech_stack_score: Optional[float] = None
+    experience_score: Optional[float] = None
+    education_score: Optional[float] = None
+    sector_score: Optional[float] = None
+    other_skills_score: Optional[float] = None
+
+
+class MatchCandidateModalResponse(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    total_experience_years: Optional[float] = None
+    education_degree: Optional[str] = None
+    skills: list[str] = []
+    tech_stack: list[str] = []
+    sector_experience: list[str] = []
+    raw_text: Optional[str] = None
+
+
+class MatchResultModalResponse(BaseModel):
+    overall_score: float
+    rank_position: int
+
+    candidate: MatchCandidateModalResponse
+
+    matched_skills: list[str] = []
+
+    score_breakdown: MatchScoreBreakdownResponse
 class ResumeFileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
